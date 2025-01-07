@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, Union
 import logfire
-from agentic_bench.utils.models import LedgerAnswer, LedgerModel
+from utils.models import LedgerAnswer, LedgerModel
 
 # Custom exceptions for ledger management
 class LedgerError(Exception):

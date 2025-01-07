@@ -14,7 +14,7 @@ from pydantic_ai.messages import (
 from fastapi import WebSocket
 from dataclasses import asdict
 
-from agentic_bench.utils.stream_response_format import StreamResponse
+from utils.stream_response_format import StreamResponse
 
 class WebSurfer:
     def __init__(self, api_url: str = "http://localhost:8000/execute_task"):

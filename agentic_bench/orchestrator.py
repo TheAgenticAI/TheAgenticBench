@@ -6,26 +6,26 @@ import datetime
 from typing import List, Optional, Dict, Any, Union
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.messages import ModelResponse, ToolCallPart, ArgsJson
-from agentic_bench.utils.oai_client import get_client
+from utils.oai_client import get_client
 from pydantic_ai import Agent
-from agentic_bench.utils.prompts import (
+from utils.prompts import (
     ORCHESTRATOR_CLOSED_BOOK_PROMPT,
     ORCHESTRATOR_PLAN_PROMPT,
     ORCHESTRATOR_LEDGER_PROMPT,
     ORCHESTRATOR_GET_FINAL_ANSWER,
 )
-from agentic_bench.utils.models import FactModel, PlanModel
-from agentic_bench.utils.get_openai_format_json_messages_from_pydantic_message_response import (
+from utils.models import FactModel, PlanModel
+from utils.get_openai_format_json_messages_from_pydantic_message_response import (
     get_openai_format_json_messages_from_pydantic_message_response,
     convert_json_to_string_messages,
 )
-from agentic_bench.agents.file_surfer import (
+from agents.file_surfer import (
     FileToolDependencies,
     FileSurfer,
     RequestsMarkdownBrowser,
 )
-from agentic_bench.agents.web_surfer import WebSurfer
-from agentic_bench.agents.coder_agent import (
+from agents.web_surfer import WebSurfer
+from agents.coder_agent import (
     CoderAgent,
     CoderDependencies,
     CoderResult,
@@ -35,8 +35,8 @@ from agentic_bench.agents.coder_agent import (
     DockerCodeExecutor,
     LocalCodeExecutor,
 )
-from agentic_bench.utils.stream_response_format import StreamResponse
-from agentic_bench.ledger import LedgerManager, LedgerModel
+from utils.stream_response_format import StreamResponse
+from ledger import LedgerManager, LedgerModel
 from dotenv import load_dotenv
 from fastapi import WebSocket
 from dataclasses import asdict

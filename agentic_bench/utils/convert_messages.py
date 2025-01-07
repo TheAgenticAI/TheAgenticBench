@@ -1,6 +1,6 @@
 from typing import List, Union
-from agentic_bench.utils.types import FunctionCall, FunctionExecutionResult
-from agentic_bench.utils.image import Image
+from utils.types import FunctionCall, FunctionExecutionResult
+from utils.image import Image
 
 # Convenience type
 UserContent = Union[str, List[Union[str, Image]]]

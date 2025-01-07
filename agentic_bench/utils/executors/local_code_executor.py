@@ -9,7 +9,7 @@ from string import Template
 from types import SimpleNamespace
 from typing import Any, Callable, ClassVar, List, Optional, Sequence, Union
 import venv
-from agentic_bench.utils import CancellationToken
+from utils import CancellationToken
 from .executor_utils import (
     CodeBlock,
     CodeExecutor,
