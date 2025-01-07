@@ -351,9 +351,9 @@ if __name__ == "__main__":
 
         # Initialize OpenAI model
         model = OpenAIModel(
-            model_name=os.getenv("MODEL_NAME", "gpt-4o"),
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL"),
+            model_name=os.getenv("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
+            api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
+            base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
         )
 
         # Initialize agent and file surfer

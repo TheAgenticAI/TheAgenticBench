@@ -17,6 +17,6 @@ async def agent_chat(task: str) -> List:
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-
-    data = await websocket.receive_text()
-    await generate_response(data, websocket)
+    while True:
+        data = await websocket.receive_text()
+        await generate_response(data, websocket)

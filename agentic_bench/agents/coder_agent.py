@@ -216,7 +216,7 @@ if __name__ == "__main__":
 
     logfire.configure()
     model = OpenAIModel(
-        os.environ.get("MODEL_NAME", "gpt-4o"), openai_client=get_client()
+        os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"), openai_client=get_client()
     )
 
     coder_description = "A helpful and general-purpose AI assistant that has strong language skills, Python skills, and Linux command line skills."

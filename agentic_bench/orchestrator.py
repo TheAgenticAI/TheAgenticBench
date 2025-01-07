@@ -115,7 +115,7 @@ class SystemOrchestrator:
             logfire.info("Initializing agents")
 
             self.model = OpenAIModel(
-                os.environ.get("MODEL_NAME", "gpt-4o"), openai_client=self.client
+                os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"), openai_client=self.client
             )
 
             # Initialize File Surfer agent
@@ -178,9 +178,9 @@ code here...
 
             # We create initial executor dependencies without the coder_result
             # This will be updated during runtime when we have actual results
-            executor_type = os.environ.get("EXECUTOR")
+            executor_type = os.environ.get("AGENTIC_BENCH_EXECUTOR")
             if executor_type and executor_type in os.environ.get(
-                "SUPPORTED_EXECUTORS", []
+                "AGENTIC_BENCH_SUPPORTED_EXECUTORS", []
             ):
                 if executor_type == "Docker":
                     executor = DockerCodeExecutor()
