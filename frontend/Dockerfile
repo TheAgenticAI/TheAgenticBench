@@ -1,14 +1,9 @@
 FROM node:22-alpine
 
-ARG PRODUCT_LOGO
-ARG PRODUCT_ICON
-ARG PRODUCT_PAGE_TITLE
-ARG WEBSOCKET_URL
-
-ENV VITE_PRODUCT_LOGO=$PRODUCT_LOGO
-ENV VITE_PRODUCT_ICON=$PRODUCT_ICON
-ENV VITE_PRODUCT_PAGE_TITLE=$PRODUCT_PAGE_TITLE
-ENV VITE_WEBSOCKET_URL=$WEBSOCKET_URL
+ENV VITE_PRODUCT_LOGO=https://sg-ui-assets.s3.us-east-1.amazonaws.com/ta_bench_logo.svg
+ENV VITE_PRODUCT_ICON=https://sg-ui-assets.s3.us-east-1.amazonaws.com/ta_bench_favicon.svg
+ENV VITE_PRODUCT_PAGE_TITLE="AgenticBench"
+ENV VITE_WEBSOCKET_URL=ws://localhost:8081/ws
 
 WORKDIR /app
 
@@ -22,4 +17,4 @@ RUN npm run build
 
 EXPOSE 3000
 
-CMD [ "npm", "run", "preview" ]
+CMD [ "npm", "run", "dev" ]

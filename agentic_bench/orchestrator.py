@@ -209,7 +209,7 @@ code here...
                 agent=exec_agent, system_prompt=executor_system_message
             )
 
-            web_surfer_agent = WebSurfer(api_url="http://localhost:8000/execute_task")
+            web_surfer_agent = WebSurfer(api_url="http://localhost:8082/execute_task")
 
             self.agents = [
                 file_surfer_agent,

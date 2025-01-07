@@ -6,33 +6,40 @@ services:
       context: ./agentic_bench
       dockerfile: Dockerfile
     ports:
-      - "8081:8081"
+      - 8081:8081
     volumes:
       - ./agentic_bench:/app
     env_file:
       - .env
+    network_mode: host
+    restart: always
 
   autoscrapper:
     build:
       context: ./autoscrapper
       dockerfile: Dockerfile
     ports:
-      - "8082:8082"
+      - 8082:8082
     volumes:
       - ./autoscrapper:/app
     env_file:
       - .env
+    network_mode: host
+    restart: always
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - 3000:3000
     volumes:
       - ./frontend:/app
+      - /app/node_modules
     env_file:
       - .env
     depends_on:
       - agentic_bench
       - autoscrapper
+    network_mode: host
+    restart: always

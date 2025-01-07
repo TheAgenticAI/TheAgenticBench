@@ -96,7 +96,7 @@ You can directly run the project from the main.py file or even spin up a server 
   Details -
 
   ```
-  POST http://127.0.0.1:8000/execute_task
+  POST http://127.0.0.1:8082/execute_task
 
   {
       "command": "Give me the price of RTX 3060ti on amazon.in and give me the latest delivery date."
@@ -119,7 +119,7 @@ docker run -it --net=host --env-file .env autoscraper
 ```bash
 
 docker build -t autoscraper .
-docker run -it -p 8000:8000 --env-file .env autoscraper
+docker run -it -p 8082:8082 --env-file .env autoscraper
 
 ```
 
