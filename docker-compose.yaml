@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  agentic_bench:
+    build:
+      context: ./agentic_bench
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./agentic_bench:/app
+    env_file:
+      - .env
+
+  autoscrapper:
+    build:
+      context: ./autoscrapper
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./autoscrapper:/app
+    env_file:
+      - .env
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+    env_file:
+      - .env
+    depends_on:
+      - agentic_bench
+      - autoscrapper
