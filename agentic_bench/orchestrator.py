@@ -115,7 +115,9 @@ class SystemOrchestrator:
             logfire.info("Initializing agents")
 
             self.model = OpenAIModel(
-                os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"), openai_client=self.client
+                model_name=os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
+                api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
+                base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
             )
 
             # Initialize File Surfer agent
