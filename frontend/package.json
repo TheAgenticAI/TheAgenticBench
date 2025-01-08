@@ -1,5 +1,5 @@
 {
-  "name": "agentic-one-fe",
+  "name": "agentic-bench",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -18,6 +18,7 @@
     "@radix-ui/react-slot": "^1.1.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^16.4.7",
     "iconoir-react": "^7.10.1",
     "lucide-react": "^0.469.0",
     "react": "^18.3.1",
@@ -25,8 +26,8 @@
     "react-markdown": "^9.0.1",
     "react-query": "^3.39.3",
     "react-router": "^7.1.1",
-    "react-use-websocket": "^4.11.1",
     "react-syntax-highlighter": "^15.6.1",
+    "react-use-websocket": "^4.11.1",
     "rehype-raw": "^7.0.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.0",
@@ -51,6 +52,8 @@
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.18.2",
     "vite": "^6.0.5"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "^4.30.1"
   }
 }
-

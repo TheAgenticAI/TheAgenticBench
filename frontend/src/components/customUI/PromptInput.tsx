@@ -43,7 +43,9 @@ export const PromptInput = ({
     <>
       <textarea
         ref={textareaRef}
-        placeholder="Provide the goal ..."
+        placeholder={
+          disable ? "Working towards goal..." : "Provide the goal ..."
+        }
         className="w-full px-4 py-3 bg-secondary border rounded-md pr-12 focus:outline-none placeholder-muted-foreground resize-none overflow-hidden leading-[1.2] disabled:placeholder-disabled-foreground"
         value={task}
         onChange={handleInput}

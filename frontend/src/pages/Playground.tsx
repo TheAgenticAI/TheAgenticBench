@@ -1,4 +1,3 @@
-// import {PromptInput} from "@/components/customUI/PromptInput";
 import {Button} from "@/components/ui/button";
 import {DUMMY_PROMPTS} from "@/constants/dashboard";
 import {Message} from "@/lib/types";
@@ -72,23 +71,21 @@ const Playground = ({
           <div
             key={index}
             className="p-4 rounded-md border bg-background hover:bg-secondary cursor-pointer"
-            onClick={() =>
-              {
-                setMessages((prev) => {
-                  return [
-                    ...prev,
-                    {
-                      role: "user",
-                      prompt: example,
-                    },
-                    {
-                      role: "system",
-                      data: [],
-                    },
-                  ];
-                });
-              }
-            }
+            onClick={() => {
+              setMessages((prev) => {
+                return [
+                  ...prev,
+                  {
+                    role: "user",
+                    prompt: example,
+                  },
+                  {
+                    role: "system",
+                    data: [],
+                  },
+                ];
+              });
+            }}
           >
             <ArrowUpRight className="w-4 h-4 ml-auto opacity-100 transition-opacity mb-3" />
             <p className="text-sm">{example}</p>
