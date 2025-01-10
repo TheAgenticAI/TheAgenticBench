@@ -7,7 +7,7 @@ import logging
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass
 from functools import wraps
-from utils.markdown_browser import RequestsMarkdownBrowser
+from agentic_bench.utils.markdown_browser import RequestsMarkdownBrowser
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import (
     SystemPromptPart,

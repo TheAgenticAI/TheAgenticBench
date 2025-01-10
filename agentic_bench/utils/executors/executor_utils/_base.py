@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Protocol, runtime_checkable
 
-from utils import CancellationToken
+from agentic_bench.utils import CancellationToken
 
 @dataclass
 class CodeBlock:

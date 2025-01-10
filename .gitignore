@@ -1,3 +1,4 @@
 .env
 .env.local
 .venv/
+terminal_logs/*

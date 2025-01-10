@@ -1,7 +1,7 @@
 from fastapi import FastAPI, WebSocket
 from typing import Optional, List
 
-from orchestrator import SystemOrchestrator
+from agentic_bench.orchestrator import SystemOrchestrator
 
 app: FastAPI = FastAPI()
 orchestrator: SystemOrchestrator = SystemOrchestrator()

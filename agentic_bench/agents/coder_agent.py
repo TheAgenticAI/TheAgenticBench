@@ -11,12 +11,12 @@ from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.tools import AgentDeps
 from typing import List, Type, Union, Callable, Awaitable, Literal, Tuple, Any
 
-from utils import CancellationToken
-from utils.executors.executor_utils import CodeBlock
-from utils.executors import LocalCommandLineCodeExecutor as LocalCodeExecutor
-from utils.executors import DockerCommandLineCodeExecutor as DockerCodeExecutor
-from utils.executors.executor_utils._base import CodeExecutor
-from utils.oai_client import get_client
+from agentic_bench.utils import CancellationToken
+from agentic_bench.utils.executors.executor_utils import CodeBlock
+from agentic_bench.utils.executors import LocalCommandLineCodeExecutor as LocalCodeExecutor
+from agentic_bench.utils.executors import DockerCommandLineCodeExecutor as DockerCodeExecutor
+from agentic_bench.utils.executors.executor_utils._base import CodeExecutor
+from agentic_bench.utils.oai_client import get_client
 
 load_dotenv()
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Callable, ClassVar, List, Optional, ParamSpec, Type, Union
 
-from utils import CancellationToken
+from agentic_bench.utils import CancellationToken
 from .executor_utils import (
     CodeBlock,
     CodeExecutor,

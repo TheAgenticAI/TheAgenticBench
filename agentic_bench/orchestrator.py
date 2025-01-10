@@ -1,126 +1,129 @@
-import logfire
 import os
-import re
 import json
-import datetime
-from typing import List, Optional, Dict, Any, Union
+import traceback
+from typing import List, Optional, Dict, Any, Union, Tuple
+from datetime import datetime
+from pydantic import BaseModel
+from dataclasses import asdict
+import logfire
+from fastapi import WebSocket
+from dotenv import load_dotenv
+
 from pydantic_ai.models.openai import OpenAIModel
-from pydantic_ai.messages import ModelResponse, ToolCallPart, ArgsJson
-from utils.oai_client import get_client
 from pydantic_ai import Agent
-from utils.prompts import (
-    ORCHESTRATOR_CLOSED_BOOK_PROMPT,
+from agentic_bench.utils.stream_response_format import StreamResponse
+from agentic_bench.utils.prompts import (
     ORCHESTRATOR_PLAN_PROMPT,
-    ORCHESTRATOR_LEDGER_PROMPT,
     ORCHESTRATOR_GET_FINAL_ANSWER,
 )
-from utils.models import FactModel, PlanModel
-from utils.get_openai_format_json_messages_from_pydantic_message_response import (
-    get_openai_format_json_messages_from_pydantic_message_response,
-    convert_json_to_string_messages,
+from agentic_bench.agents.file_surfer import FileSurfer, FileToolDependencies, RequestsMarkdownBrowser
+from agentic_bench.agents.web_surfer import WebSurfer
+from agentic_bench.agents.coder_agent import (
+    CoderAgent, CoderDependencies, Executor, ExecutorDependencies,
+    DockerCodeExecutor, LocalCodeExecutor
 )
-from agents.file_surfer import (
-    FileToolDependencies,
-    FileSurfer,
-    RequestsMarkdownBrowser,
-)
-from agents.web_surfer import WebSurfer
-from agents.coder_agent import (
-    CoderAgent,
-    CoderDependencies,
-    CoderResult,
-    Executor,
-    ExecutorDependencies,
-    ExecutorResult,
-    DockerCodeExecutor,
-    LocalCodeExecutor,
-)
-from utils.stream_response_format import StreamResponse
-from ledger import LedgerManager, LedgerModel
-from dotenv import load_dotenv
-from fastapi import WebSocket
-from dataclasses import asdict
 
 load_dotenv()
 
-logfire.configure(
-    send_to_logfire="if-token-present",
-    token=os.getenv("LOGFIRE_TOKEN"),
-    scrubbing=False,
-)
+# Base Models
+class PlanModel(BaseModel):
+    """Model for the planning stage output"""
+    plan: str
+    metadata: Optional[Dict[str, Any]] = None
 
-def _convert_messages_to_openai_format(messages: List[dict]) -> List[dict]:
-    """Convert custom message format to OpenAI format"""
-    openai_messages = []
+class AgentSelectorOutput(BaseModel):
+    """Model for the agent selection output"""
+    next_speaker: str
+    instruction: str
+    explanation: str
 
-    for message in messages:
-        for part in message.get("parts", []):
-            if part.get("part_kind") == "user-prompt":
-                openai_messages.append({"role": "user", "content": part["content"]})
-            elif part.get("part_kind") == "tool-call":
-                args_json = json.loads(part["args"]["args_json"])
-                openai_messages.append(
-                    {"role": "assistant", "content": args_json.get("content", "")}
-                )
-            elif part.get("part_kind") == "system-prompt":
-                openai_messages.append({"role": "system", "content": part["content"]})
+class CritiqueOutput(BaseModel):
+    """Model for critique stage output"""
+    feedback: str
+    terminate: bool
+    final_response: Optional[str] = None
+    retry_count: Optional[int] = 0
 
-    return openai_messages
+class AgentExecutionResult(BaseModel):
+    """Model for storing agent execution results"""
+    success: bool
+    output: str
+    error_message: Optional[str] = None
+    execution_time: float
+    agent_name: str
 
-# Custom exceptions
-class OrchestratorError(Exception):
-    """Base exception for orchestrator errors"""
-
+# Custom Exceptions
+class OrchestrationError(Exception):
+    """Base exception for orchestration errors"""
     pass
 
-class AgentInitializationError(OrchestratorError):
+class AgentInitializationError(OrchestrationError):
     """Raised when agent initialization fails"""
-
     pass
 
-class TaskInitializationError(OrchestratorError):
-    """Raised when task initialization fails"""
-
+class AgentExecutionError(OrchestrationError):
+    """Raised when agent execution fails"""
     pass
 
-class MessageHistory:
-    def __init__(self, messages):
-        self.messages = messages if isinstance(messages, list) else [messages]
+class WebSocketError(OrchestrationError):
+    """Raised when WebSocket communication fails"""
+    pass
 
-    def all_messages(self):
-        return self.messages
+# Context Management
+class OrchestrationContext:
+    """Maintains the context throughout the orchestration process"""
+    def __init__(self):
+        self.current_plan: Optional[str] = None
+        self.execution_history: List[AgentExecutionResult] = []
+        self.retry_counts: Dict[str, int] = {}
+        self.max_retries: int = 3
+        self.chat_history: List[dict] = []
 
-# Type definition for supported agent types
-AgentType = Union[FileSurfer, CoderAgent, Executor, WebSurfer]
-
+# Main Orchestrator Class
 class SystemOrchestrator:
     def __init__(self):
-        self.agents: List[AgentType] = []
-        self.team_description: str = ""
-        self.client = get_client()
-        self.facts = None
-        self.chat_history = []
-        self.ledger_manager = LedgerManager()
+        self.agents: List[Union[FileSurfer, CoderAgent, Executor, WebSurfer]] = []
         self.model: Optional[OpenAIModel] = None
-        self.coder_deps = None
-        self.executor_deps = None
-        logfire.info("Orchestrator initialized")
         self.websocket: Optional[WebSocket] = None
         self.stream_output: Optional[StreamResponse] = None
         self.orchestrator_response: List[StreamResponse] = []
+        self.context = OrchestrationContext()
+        self.coder_deps = None
+        self.executor_deps = None
+        self._setup_logging()
 
-    async def initialize_agents(self) -> List[AgentType]:
-        """Initialize all required agents"""
+    def _setup_logging(self) -> None:
+        """Configure logging with proper formatting"""
+        logfire.configure(
+            send_to_logfire='if-token-present',
+            token=os.getenv("LOGFIRE_TOKEN"),
+            scrubbing=False,
+        )
+
+    async def _safe_websocket_send(self, message: Any) -> bool:
+        """Safely send message through websocket with error handling"""
+        try:
+            if self.websocket and self.websocket.client_state.CONNECTED:
+                await self.websocket.send_text(json.dumps(asdict(message)))
+                return True
+            return False
+        except Exception as e:
+            logfire.error(f"WebSocket send failed: {str(e)}")
+            return False
+
+    async def initialize_agents(self) -> List[Union[FileSurfer, CoderAgent, Executor, WebSurfer]]:
+        """Initialize all required agents with error handling"""
         try:
             logfire.info("Initializing agents")
 
+            # Initialize OpenAI model
             self.model = OpenAIModel(
-                model_name=os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
+                model_name=os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4"),
                 api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
                 base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
             )
 
-            # Initialize File Surfer agent
+            # Initialize File Surfer
             file_surfer = Agent(
                 model=self.model,
                 name="File Surfer Agent",
@@ -129,600 +132,418 @@ class SystemOrchestrator:
             file_surfer_agent = FileSurfer(
                 agent=file_surfer,
                 browser=RequestsMarkdownBrowser(
-                    viewport_size=1024 * 5, downloads_folder="coding"
-                ),
+                    viewport_size=1024 * 5,
+                    downloads_folder="coding"
+                )
             )
 
-            # Initialize Coder agent
+            # Initialize Coder Agent
             coder_description = "A helpful and general-purpose AI assistant that has strong language skills, Python skills, and Linux command line skills."
-            coder_system_message = """You are a helpful AI assistant. Solve tasks using your coding and language skills.
-
-In the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute:
-
-1. When you need to collect info, use the code to output the info you need
-2. When you need to perform some task with code, use the code to perform the task and output the result
-
-Follow these rules:
-- Always wrap code in ```python or ```sh markers
-- Put # filename: <filename> as first line in code blocks if file needs to be saved
-- Only one code block per response
-- Use print function for output when relevant
-- Provide complete, executable code only
-- Do not use code blocks for non-executable explanations
-- Reply "TERMINATE" when done
-
-Example format:
-```python
-# filename: example.py
-code here...
-```
-"""
-
-            coder_deps = CoderDependencies(
+            coder_system_message = """You are a helpful AI assistant. Solve tasks using your coding and language skills."""
+            
+            self.coder_deps = CoderDependencies(
                 description=coder_description,
                 system_messages=coder_system_message,
-                request_terminate=False,
+                request_terminate=False
             )
-            self.coder_deps = coder_deps
 
             cod_agent = Agent(
                 model=self.model,
                 name="Coder Agent",
                 deps_type=CoderDependencies,
-                result_type=CoderResult,
             )
             coder_agent = CoderAgent(
-                agent=cod_agent, system_prompt=coder_system_message
+                agent=cod_agent,
+                system_prompt=coder_system_message
             )
 
-            # Initialize Executor agent
+            # Initialize Executor
             executor_system_message = "A computer terminal that performs no other action than running Python scripts or sh shell scripts"
-
-            # We create initial executor dependencies without the coder_result
-            # This will be updated during runtime when we have actual results
+            
             executor_type = os.environ.get("AGENTIC_BENCH_EXECUTOR")
-            if executor_type and executor_type in os.environ.get(
-                "AGENTIC_BENCH_SUPPORTED_EXECUTORS", []
-            ):
-                if executor_type == "Docker":
-                    executor = DockerCodeExecutor()
-                else:
-                    executor = LocalCodeExecutor()
-
-                executor_deps = ExecutorDependencies(
+            if executor_type in os.environ.get("AGENTIC_BENCH_SUPPORTED_EXECUTORS", []):
+                executor = DockerCodeExecutor() if executor_type == "Docker" else LocalCodeExecutor()
+                
+                self.executor_deps = ExecutorDependencies(
                     executor=executor,
                     confirm_execution="ACCEPT_ALL",
                     description="Executor to execute the generated code",
                     system_message=executor_system_message,
-                    content=None,  # This will be populated during runtime
-                    check_last_n_message=5,
+                    content=None,
+                    check_last_n_message=5
                 )
-                self.executor_deps = executor_deps
 
             exec_agent = Agent(
                 model=self.model,
                 name="Executor Agent",
                 deps_type=ExecutorDependencies,
-                result_type=ExecutorResult,
-                system_prompt="You are a computer terminal that performs no other action than running Python scripts or sh shell scripts.",
             )
-
             executor_agent = Executor(
-                agent=exec_agent, system_prompt=executor_system_message
+                agent=exec_agent,
+                system_prompt=executor_system_message
             )
 
-            web_surfer_agent = WebSurfer(api_url="http://localhost:8082/execute_task")
+            # Initialize Web Surfer
+            web_surfer_agent = WebSurfer(api_url="http://localhost:8000/execute_task")
 
-            self.agents = [
-                file_surfer_agent,
-                coder_agent,
-                executor_agent,
-                web_surfer_agent,
-            ]
+            # Combine all agents
+            self.agents = [file_surfer_agent, coder_agent, executor_agent, web_surfer_agent]
             logfire.info(f"Successfully initialized {len(self.agents)} agents")
-            logfire.info(f"Agents: {[agent.name for agent in self.agents]}")
-
+            
             return self.agents
 
         except Exception as e:
-            error_msg = f"Failed to initialize agents: {str(e)}"
-            logfire.error(error_msg, exc_info=True)
+            error_msg = f"Failed to initialize agents: {str(e)}\n{traceback.format_exc()}"
+            logfire.error(error_msg)
             raise AgentInitializationError(error_msg)
 
-    async def initialize_task(self, task: str) -> str:
-        """Initialize task and create initial plan"""
+    async def generate_plan(self, task: str) -> Tuple[bool, str, Optional[str]]:
+        """Generate initial plan with error handling"""
         try:
-            logfire.info(f"Initializing task: {task}")
+            planner_prompt = f"""You only need to answer in a string format. Never perform any tool calls for any agents, Just make a plan (string format) based on the information you have.
 
-            # Initialize team description
-            self.team_description = (
-                "Coder Agent for writing code, Executor agent for executing the written code, "
-                "File surfer agent for reading local files, Web surfer agent for searching and "
-                "extracting information from web pages."
-            )
+            Based on the team composition, and known and unknown facts, please devise a short bullet-point plan for addressing the original request. Remember, there is no requirement to involve all team members -- a team member's particular expertise may not be needed for this task.
 
-            # Initialize ledger
-            self.ledger_manager.initialize_ledger()
+            <rules>
+                <input_processing> 
+                    - You are provided with a team description that contains information about the team members and their expertise.
+                    - These team members receive the plan generated by you but cannot follow direct orders like tool calls from you, so you are strictly restricted to only making a plan.
+                    - You do not have access to any tools, just a string input and a string reply.
+                </input_processing> 
 
-            # Gather facts
-            fact_subagent_prompt = ORCHESTRATOR_CLOSED_BOOK_PROMPT.format(task=task)
-            fact_subagent = Agent(
+                <output_processing>
+                    - You need to provide a plan in a string format.
+                    - The agents in the team are not directly under you so you cannot give any tool calls since you have no access to any tools whatsoever. 
+                    - You need to plan in such a way that a combination of team members can be used if needed to handle and solve the task at hand. 
+                    - We always first use the RAG Agent to get the information from the documents and then use the Web Searcher to get the information from the web if the RAG Agent fails to provide the information.
+                </output_processing>
+
+                <critical>
+                    - You always need to generate a plan that satisfies the request strictly using the agents that we have.
+                    - Never ever try to answer the question yourself no matter how simple it is actually.
+                </critical>
+            </rules>
+            
+            Available agents: {[agent.name for agent in self.agents]}
+            
+            Output a JSON with a 'plan' key containing the detailed plan."""
+
+            planner_agent = Agent(
                 model=self.model,
-                name="Fact Sub-Agent",
-                system_prompt=fact_subagent_prompt,
-                result_type=FactModel,
+                name="Planner Agent",
+                system_prompt=planner_prompt,
+                result_type=PlanModel
             )
+            
+            start_time = datetime.now()
+            plan_result = await planner_agent.run(task)
+            execution_time = (datetime.now() - start_time).total_seconds()
 
-            fact_result = await fact_subagent.run(task)
-            # Extract just the string content from facts
-            facts_text = (
-                fact_result.data.facts
-                if isinstance(fact_result.data, FactModel)
-                else str(fact_result.data)
-            )
-            self.facts = facts_text
-            logfire.info(f"Facts gathered successfully: {self.facts}")
-
-            # Create plan
-            planner_subagent_prompt = ORCHESTRATOR_PLAN_PROMPT.format(
-                team=self.team_description
-            )
-            planner_subagent = Agent(
-                model=self.model,
-                name="Planner Sub-Agent",
-                system_prompt=planner_subagent_prompt,
-                result_type=PlanModel,
-            )
-
-            plan_result = await planner_subagent.run(self.facts)
-            # Extract just the string content from plan
-            plan_text = (
-                plan_result.data.plan
-                if isinstance(plan_result.data, PlanModel)
-                else str(plan_result.data)
-            )
-            self.plan = plan_text
-            logfire.info(f"Plan generated successfully: {self.plan}")
-            print(f"Generated Plan: {self.plan}")
-
-            # Clean start for chat history
-            self.chat_history = []
-
-            return self.plan
+            logfire.info(f"Plan generation completed in {execution_time}s")
+            logfire.info(f"Planner agent new messages : {plan_result.new_messages()}")
+            
+            return True, plan_result.data.plan, None
 
         except Exception as e:
-            error_msg = f"Failed to initialize task: {str(e)}"
-            logfire.error(error_msg, exc_info=True)
-            raise TaskInitializationError(error_msg)
+            error_msg = f"Plan generation failed: {str(e)}\n{traceback.format_exc()}"
+            logfire.error(error_msg)
+            return False, "", error_msg
 
-    async def update_ledger_state(self) -> None:
-        """Update ledger state using LLM"""
+    async def select_next_agent(self, current_state: str) -> Tuple[bool, Optional[AgentSelectorOutput], Optional[str]]:
+        """Select next agent with comprehensive error handling"""
         try:
-            print("Updating ledger state......")
-            if not self.model:
-                raise OrchestratorError("Model not initialized")
+            selector_prompt = f"""
+            
+            You are a selector agent. Your job is to look at the conversation flow and the agents at hand and then correctly decided which agent should speak next. Also when you decide which agent should speak next, you need to provide the instruction that the agent should follow.
 
-            # Include chat history in the prompt
-            # oai_json_formatted_messages = get_openai_format_json_messages_from_pydantic_message_response(self.chat_history)
-            # string_chat_context = convert_json_to_string_messages(oai_json_formatted_messages)
-            # openai_formatted_messages = _convert_messages_to_openai_format(self.chat_history)
+            Available agents :  ({[a.name for a in self.agents]}),
+            
+            <rules>
+                <input_processing>
+                    - You have been provided with the current plan that we are supposed to execute and complete in order to satisfy the request.
+                    - You need to look at the conversation and then decide which agent should speak next.
+                </input_processing>
 
-            prompt = ORCHESTRATOR_LEDGER_PROMPT.format(
-                task=self.facts if self.facts else "",
-                team=self.team_description,
-                names=[agent.name for agent in self.agents],
-            )
+                <output_processing>
+                    - You need to output a JSON with keys "next_speaker", "instruction", and "explanation".
+                    - The "next_speaker" key should contain the name of the agent that you think should speak next.
+                    - The "instruction" key should contain the instruction that the agent should follow.
+                    - The "explanation" key should contain the reasoning behind your decision.
 
-            # print("Ledger Update Prompt: ", prompt)
-            print(f"Message History : {self.chat_history}")
+                </output_processing>
+            </rules>
+            
+            """
 
-            ledger_agent = Agent(
+            selector_agent = Agent(
                 model=self.model,
-                name="Ledger Agent",
-                system_prompt="",
-                result_type=LedgerModel,
+                name="Agent Selector",
+                system_prompt=selector_prompt,
+                result_type=AgentSelectorOutput
             )
 
-            # Pass the chat history to maintain context
-            result = await ledger_agent.run(
-                prompt, message_history=self.chat_history or None
-            )
-
-            logfire.debug(
-                f"Ledger updated successfully {json.dumps(result.data.model_dump(), indent=4)}"
-            )
-            print(
-                f"Ledger updated successfully {json.dumps(result.data.model_dump(), indent=4)}"
-            )
-            self.ledger_manager.update_ledger(result.data.model_dump())
+            result = await selector_agent.run(current_state)
+            logfire.info(f"Agent selection completed: {result.data}")
+            logfire.info(f"Selector agent new messages : {result.new_messages()}")
+            return True, result.data, None
 
         except Exception as e:
-            logfire.error(f"Failed to update ledger: {str(e)}", exc_info=True)
-            raise
+            error_msg = f"Agent selection failed: {str(e)}\n{traceback.format_exc()}"
+            logfire.error(error_msg)
+            return False, None, error_msg
 
-    async def select_next_agent(self) -> Optional[AgentType]:
-        """Select next agent based on ledger state"""
+    async def execute_agent_instruction(self, agent: Union[FileSurfer, CoderAgent, Executor, WebSurfer], instruction: str) -> AgentExecutionResult:
+        """Execute agent instruction with robust error handling using generate_reply"""
+        start_time = datetime.now()
+        result = AgentExecutionResult(
+            success=False,
+            output="",
+            error_message=None,
+            execution_time=0.0,
+            agent_name=agent.name
+        )
+
         try:
-            print("Selecting next speaker......")
-            next_speaker = self.ledger_manager.get_next_speaker()
-            if not next_speaker:
-                logfire.info("No next speaker specified in ledger")
-                return None
-
-            # Log available agents for debugging
-            available_agents = [agent.name for agent in self.agents]
-            logfire.debug(f"Available agents: {available_agents}")
-
-            # Find matching agent
-            for agent in self.agents:
-                if agent.name == next_speaker:
-                    logfire.info(f"Selected agent: {agent.name}")
-                    print()
-                    print(f"Next Speaker: {agent.name}")
-                    print()
-                    return agent
-
-            logfire.warn(
-                f"No agent found for speaker: {next_speaker}. Available agents: {available_agents}"
+            # Update stream output for WebSocket
+            self.stream_output = StreamResponse(
+                agent_name=agent.name,
+                instructions=instruction,
+                steps=[],
+                output="",
+                status_code=0
             )
-            return None
+            await self._safe_websocket_send(self.stream_output)
 
-        except Exception as e:
-            logfire.error(f"Error selecting next agent: {str(e)}", exc_info=True)
-            return None
-
-    async def execute_agent_instruction(self, agent):
-        try:
-            instruction = self.ledger_manager.get_instruction()
-            if not instruction:
-                raise OrchestratorError("No instruction available")
-
-            log = f"Executing instruction {instruction} with {agent.__class__.__name__}"
-            logfire.info(log)
-            if self.stream_output and self.stream_output.agent_name == agent.name:
-                self.stream_output.steps.append(
-                    f"Executing the instruction with {agent.__class__.__name__}"
-                )
-                if self.websocket:
-                    await self.websocket.send_text(
-                        json.dumps(asdict(self.stream_output))
-                    )
-
-            if isinstance(agent, WebSurfer):
-                assert self.websocket is not None
-                assert self.stream_output is not None
+            # Prepare agent-specific kwargs based on agent type
+            if isinstance(agent, CoderAgent):
                 success, response, messages = await agent.generate_reply(
-                    instruction, self.websocket, self.stream_output
+                    user_message=instruction,
+                    deps=self.coder_deps
                 )
-                if success:
-                    self.chat_history = [*self.chat_history, *messages]
-                    log = "WebSurfer response received and messages stored"
-                    logfire.info(log)
-                    if (
-                        self.stream_output
-                        and self.stream_output.agent_name == agent.name
-                    ):
-                        self.stream_output.steps.append(log)
-                        if self.websocket:
-                            await self.websocket.send_text(
-                                json.dumps(asdict(self.stream_output))
-                            )
-
-                    print(f"WebSurfer response: {response}")
-                    if (
-                        self.stream_output
-                        and self.stream_output.agent_name == agent.name
-                    ):
-                        self.stream_output.output = response
-                        self.stream_output.status_code = 200
-                        self.orchestrator_response.append(self.stream_output)
-                        if self.websocket:
-                            await self.websocket.send_text(
-                                json.dumps(asdict(self.stream_output))
-                            )
-                    return
-                else:
-                    logfire.error(
-                        f"Failed to execute WebSurfer instruction: {response}"
-                    )
-                    raise OrchestratorError(f"WebSurfer execution failed: {response}")
-
-            elif isinstance(agent, CoderAgent) and self.coder_deps:
-                success, response, messages = await agent.generate_reply(
-                    instruction, deps=self.coder_deps
-                )
-
-                if success:
-                    # Append coder messages to chat history
-                    self.chat_history = [*self.chat_history, *messages]
-                    logfire.info(f"Coder agent messages : {messages}")
-                    try:
-                        # Parse the coder's response to get content and dependencies
-                        # Response format is like: "terminated=True dependencies=['fastapi'] content='# code here...'"
-                        parts = response.split("content=")
-                        code_content = parts[1].strip("'")
-
-                        # More robust dependency parsing
-                        deps_part = parts[0].split("dependencies=")[1]
-                        # Extract everything between [ and ]
-                        deps_list = re.search(r"\[(.*?)\]", deps_part)
-                        if deps_list:
-                            # Split by comma, clean each dependency
-                            dependencies = [
-                                dep.strip().strip("'").strip('"').strip()
-                                for dep in deps_list.group(1).split(",")
-                                if dep.strip()
-                            ]
-                        else:
-                            dependencies = []
-
-                        print(f"Extracted dependencies: {dependencies}")
-
-                        # Store what executor needs directly
-                        if self.executor_deps:
-                            self.executor_deps.content = {
-                                "content": code_content,
-                                "dependencies": dependencies,
-                            }
-                        log = "Coder agent response received and messages stored"
-                        logfire.info(log)
-                        if (
-                            self.stream_output
-                            and self.stream_output.agent_name == agent.name
-                        ):
-                            self.stream_output.steps.append(log)
-                            if self.websocket:
-                                await self.websocket.send_text(
-                                    json.dumps(asdict(self.stream_output))
-                                )
-
-                        print(f"Coder agent response : {response}")
-                        print(f"Parsed content and dependencies:")
-                        print(f"Dependencies: {dependencies}")
-                        print(f"Content : {code_content}")
-                        if (
-                            self.stream_output
-                            and self.stream_output.agent_name == agent.name
-                        ):
-                            self.stream_output.output = code_content
-                            self.stream_output.status_code = 200
-                            self.orchestrator_response.append(self.stream_output)
-                            if self.websocket:
-                                await self.websocket.send_text(
-                                    json.dumps(asdict(self.stream_output))
-                                )
-                    except Exception as e:
-                        logfire.error(f"Failed to parse coder response: {e}")
-                        print(f"Raw response for debugging: {response}")
-                        raise OrchestratorError(f"Failed to parse coder response: {e}")
-
-                else:
-                    logfire.error(f"Failed to execute coder instruction: {response}")
-
             elif isinstance(agent, Executor):
-                if not self.executor_deps or not self.executor_deps.content:
-                    logfire.error("No coder result available for executor")
-                    raise OrchestratorError(
-                        "Executor deps not properly initialized with coder result"
-                    )
-
-                print(
-                    f"Executor dependencies: {self.executor_deps.content.get('dependencies', [])}"
-                )
-                if self.stream_output and self.stream_output.agent_name == agent.name:
-                    self.stream_output.steps.append(
-                        "Executing the code in a safe environment"
-                    )
-                    if self.websocket:
-                        await self.websocket.send_text(
-                            json.dumps(asdict(self.stream_output))
-                        )
                 success, response, messages = await agent.generate_reply(
-                    instruction, deps=self.executor_deps
+                    user_message=instruction,
+                    deps=self.executor_deps
+                )
+            elif isinstance(agent, WebSurfer):
+                success, response, messages = await agent.generate_reply(
+                    instruction=instruction,
+                    websocket=self.websocket,
+                    stream_output=self.stream_output
+                )
+            else:  # FileSurfer
+                success, response, messages = await agent.generate_reply(
+                    instruction=instruction
                 )
 
-                if success:
-                    self.chat_history = [*self.chat_history, *messages]
-                    log = "Executor agent response received and messages stored"
-                    logfire.info(log)
-                    print(f"Executor agent response: {response}")
-                    logfire.info(f"Executor agent messages: {messages}")
-
-                    if (
-                        self.stream_output
-                        and self.stream_output.agent_name == agent.name
-                    ):
-                        self.stream_output.steps.append(log)
-                        if self.websocket:
-                            await self.websocket.send_text(
-                                json.dumps(asdict(self.stream_output))
-                            )
-                    if (
-                        self.stream_output
-                        and self.stream_output.agent_name == agent.name
-                    ):
-                        self.stream_output.output = response
-                        self.stream_output.status_code = 200
-                        self.orchestrator_response.append(self.stream_output)
-                        if self.websocket:
-                            await self.websocket.send_text(
-                                json.dumps(asdict(self.stream_output))
-                            )
-                else:
-                    logfire.error(f"Failed to execute executor instruction: {response}")
-
-            elif isinstance(agent, FileSurfer):
-                success, response, messages = await agent.generate_reply(instruction)
-
-                if success:
-                    self.chat_history = [*self.chat_history, *messages]
-                    log = "FileSurfer response received and messages stored"
-                    logfire.info(log)
-                    if (
-                        self.stream_output
-                        and self.stream_output.agent_name == agent.name
-                    ):
-                        self.stream_output.steps.append(log)
-                        if self.websocket:
-                            await self.websocket.send_text(
-                                json.dumps(asdict(self.stream_output))
-                            )
-                    print(f"FileSurfer response: {response}")
-                    logfire.info(f"FileSurfer messages: {messages}")
-                    if (
-                        self.stream_output
-                        and self.stream_output.agent_name == agent.name
-                    ):
-                        self.stream_output.output = response
-                        self.stream_output.status_code = 200
-                        self.orchestrator_response.append(self.stream_output)
-                        if self.websocket:
-                            await self.websocket.send_text(
-                                json.dumps(asdict(self.stream_output))
-                            )
-                else:
-                    logfire.error(
-                        f"Failed to execute FileSurfer instruction: {response}"
-                    )
-
-            else:
-                raise OrchestratorError(f"Unknown agent type: {type(agent)}")
+            # Update result
+            execution_time = (datetime.now() - start_time).total_seconds()
+            result.success = success
+            result.output = response
+            result.execution_time = execution_time
+            
+            # Update chat history
+            if success:
+                self.context.chat_history.extend(messages)
+            
+            # Update stream output
+            if self.stream_output:
+                self.stream_output.output = response
+                self.stream_output.status_code = 200 if success else 500
+                self.orchestrator_response.append(self.stream_output)
+                await self._safe_websocket_send(self.stream_output)
 
         except Exception as e:
-            logfire.error(
-                f"Failed to execute agent instruction: {str(e)}", exc_info=True
-            )
-            if self.stream_output and self.stream_output.agent_name == agent.name:
+            error_msg = f"Agent execution failed: {str(e)}\n{traceback.format_exc()}"
+            logfire.error(error_msg)
+            result.error_message = error_msg
+            
+            if self.stream_output:
                 self.stream_output.status_code = 500
-                self.stream_output.output = str(e)
+                self.stream_output.output = error_msg
+                await self._safe_websocket_send(self.stream_output)
 
-            raise
+        return result
 
-    async def prepare_final_answer(self, task) -> str:
-        """Called when the task is complete"""
+    async def critique_execution(self, task: str, output: str, current_state: str) -> Tuple[bool, Optional[CritiqueOutput], Optional[str]]:
+        """Critique agent execution and determine next steps"""
+        try:
+            critique_prompt = """You are a critique agent. Evaluate the output and determine if:
+            1. The task is complete
+            2. The output is satisfactory
+            3. Any improvements are needed
+            
+            Output JSON with 'feedback', 'terminate', and optional 'final_response' keys."""
 
-        final_message = ORCHESTRATOR_GET_FINAL_ANSWER.format(task=task)
+            critique_agent = Agent(
+                model=self.model,
+                name="Critique Agent",
+                system_prompt=critique_prompt,
+                result_type=CritiqueOutput
+            )
+            
+            context = f"Task: {task}\nCurrent State: {current_state}\nOutput: {output}"
+            result = await critique_agent.run(context)
+            logfire.info(f"Critique completed: {result.data}")
+            logfire.info(f"Critique agent new messages : {result.new_messages()}")
+            
+            return True, result.data, None
 
-        final_answer_subagent = Agent(
-            model=self.model, name="Final Answer Sub-Agent", system_prompt=""
-        )
+        except Exception as e:
+            error_msg = f"Critique failed: {str(e)}\n{traceback.format_exc()}"
+            logfire.error(error_msg)
+            return False, None, error_msg
 
-        self.final_answer = await final_answer_subagent.run(
-            final_message, message_history=self.chat_history
-        )
+    async def prepare_final_answer(self, task: str) -> str:
+        """Prepare final answer when task is complete"""
+        try:
+            final_message = ORCHESTRATOR_GET_FINAL_ANSWER.format(task=task)
+            
+            final_agent = Agent(
+                model=self.model,
+                name="Final Answer Agent",
+                system_prompt=""
+            )
+            
+            result = await final_agent.run(final_message, message_history=self.context.chat_history)
+            return result.data
 
-        return self.final_answer.data
+        except Exception as e:
+            error_msg = f"Failed to prepare final answer: {str(e)}"
+            logfire.error(error_msg)
+            return f"Task completed but failed to generate final answer: {error_msg}"
 
-    async def run(self, task, websocket):
-        """Main orchestration loop"""
+    async def run(self, task: str, websocket: WebSocket) -> List[Dict[str, Any]]:
+        """Main orchestration loop with comprehensive error handling"""
+        self.websocket = websocket
         stream_output = StreamResponse(
             agent_name="Orchestrator",
             instructions=task,
             steps=[],
             output="",
-            status_code=0,
+            status_code=0
         )
+        
         try:
-            # Initializing web socket and the orchestrator stream object
-            self.websocket = websocket
-
-            if self.websocket:
-                await self.websocket.send_text(json.dumps(asdict(stream_output)))
-
-            # Initialize agents
+            # Initialize system
+            await self._safe_websocket_send(stream_output)
             self.agents = await self.initialize_agents()
+            stream_output.steps.append("Agents initialized successfully")
+            await self._safe_websocket_send(stream_output)
 
-            if stream_output.agent_name == "Orchestrator":
-                stream_output.steps.append("Agents are initialized")
-                if self.websocket:
-                    await self.websocket.send_text(json.dumps(asdict(stream_output)))
+            # Generate initial plan
+            logfire.info("Generating the Plan")
+            success, plan, error = await self.generate_plan(task)
+            logfire.info(f"Generated Plan: {plan}")
+            if not success:
+                stream_output.steps.append(f"Plan generation failed: {error}")
+                stream_output.status_code = 500
+                return [asdict(stream_output)]
 
-            task = task.strip()
-            if task.lower() == "exit":
-                logfire.info("Shutting down orchestrator")
+            self.context.current_plan = plan
+            current_state = plan
 
-            if not task:
-                logfire.warn("No valid task entered")
-
-            # Initialize task and create plan
-            plan = await self.initialize_task(task)
-            if stream_output.agent_name == "Orchestrator":
-                stream_output.steps.append(
-                    "Curating a plan and selecting the best agent for you"
-                )
-                if self.websocket:
-                    await self.websocket.send_text(json.dumps(asdict(stream_output)))
-                self.orchestrator_response.append(stream_output)
-
-            # Main execution loop
-            while not self.ledger_manager.is_task_complete():
-                # Update ledger state
-                await self.update_ledger_state()
-
-                # Check for stall and replan if needed
-                if self.ledger_manager.handle_stall():
-                    log = "Replanning due to stall"
-                    logfire.info(log)
-                    stream_output.steps.append(log)
-                    if self.websocket:
-                        await self.websocket.send_text(
-                            json.dumps(asdict(stream_output))
-                        )
-                    plan = await self.initialize_task(task)
+            while True:
+                # Select next agent
+                success, selector_output, error = await self.select_next_agent(current_state)
+                if not success:
+                    stream_output.steps.append(f"Agent selection failed: {error}")
                     continue
 
-                # Select and execute next agent
-                next_agent = await self.select_next_agent()
-                if next_agent:
-                    instruction = self.ledger_manager.get_instruction() or ""
-                    self.stream_output = StreamResponse(
-                        agent_name=next_agent.name,
-                        instructions=instruction,
-                        steps=[],
-                        output="",
-                        status_code=0,
-                    )
-                    if self.websocket:
-                        await self.websocket.send_text(
-                            json.dumps(asdict(self.stream_output))
+                # Find appropriate agent instance
+                selected_agent = next(
+                    (agent for agent in self.agents if agent.name == selector_output.next_speaker),
+                    None
+                )
+                
+                if not selected_agent:
+                    stream_output.steps.append(f"Agent {selector_output.next_speaker} not found")
+                    continue
+
+                # Execute instruction
+                result = await self.execute_agent_instruction(
+                    selected_agent, 
+                    selector_output.instruction
+                )
+                self.context.execution_history.append(result)
+
+                if not result.success:
+                    # Handle retry logic
+                    retry_count = self.context.retry_counts.get(selected_agent.name, 0)
+                    if retry_count < self.context.max_retries:
+                        self.context.retry_counts[selected_agent.name] = retry_count + 1
+                        stream_output.steps.append(
+                            f"Retrying {selected_agent.name} execution ({retry_count + 1}/{self.context.max_retries})"
                         )
-                    await self.execute_agent_instruction(next_agent)
-                else:
-                    logfire.warn("No agent selected, checking task completion")
+                        continue
+                    else:
+                        stream_output.steps.append(f"Max retries reached for {selected_agent.name}")
+                        # Continue with next agent instead of failing completely
+                        continue
 
-            final_answer = await self.prepare_final_answer(task)
-            if stream_output.agent_name == "Orchestrator":
-                stream_output.output = final_answer
-                stream_output.status_code = 200
-                self.orchestrator_response.append(stream_output)
+                # Critique execution
+                critique_success, critique_result, critique_error = await self.critique_execution(
+                    task, result.output, current_state
+                )
 
-                if self.websocket:
-                    await self.websocket.send_text(json.dumps(asdict(stream_output)))
-            logfire.info(f"Final answer: {final_answer}")
-            logfire.info(f"Message history: {self.chat_history}")
+                if not critique_success:
+                    stream_output.steps.append(f"Critique failed: {critique_error}")
+                    continue
 
-            print("\nFinal Answer : \n ", final_answer)
-            print("\n")
-            print("#" * 50)
-            print("\n")
+                if critique_result.terminate:
+                    final_answer = critique_result.final_response or await self.prepare_final_answer(task)
+                    stream_output.output = final_answer
+                    stream_output.status_code = 200
+                    self.orchestrator_response.append(stream_output)
+                    await self._safe_websocket_send(stream_output)
+                    break
+
+                current_state = result.output
+                
+                # Update stream output with progress
+                stream_output.steps.append(f"Completed step with {selected_agent.name}")
+                await self._safe_websocket_send(stream_output)
 
             logfire.info("Task completed successfully")
+            return [asdict(i) for i in self.orchestrator_response]
 
         except Exception as e:
-            logfire.error(f"Critical error in orchestrator: {str(e)}", exc_info=True)
-            if (
-                stream_output
-                and stream_output.agent_name == "Orchestrator"
-                and not stream_output.output
-            ):
-                stream_output.output = str(e)
+            error_msg = f"Critical orchestration error: {str(e)}\n{traceback.format_exc()}"
+            logfire.error(error_msg)
+            
+            if stream_output:
+                stream_output.output = error_msg
                 stream_output.status_code = 500
                 self.orchestrator_response.append(stream_output)
-                if self.websocket:
-                    await self.websocket.send_text(json.dumps(asdict(stream_output)))
-            raise
+                await self._safe_websocket_send(stream_output)
+            
+            # Even in case of critical error, return what we have
+            return [asdict(i) for i in self.orchestrator_response]
+
         finally:
-            logfire.info("Orchestrator shutdown complete")
-            agent_response = [asdict(i) for i in self.orchestrator_response]
+            logfire.info("Orchestration process complete")
+            # Clear any sensitive data
+            self.context = OrchestrationContext()  
+            
+    def _get_agent_by_name(self, name: str) -> Optional[Union[FileSurfer, CoderAgent, Executor, WebSurfer]]:
+        """Helper method to find agent by name"""
+        return next((agent for agent in self.agents if agent.name == name), None)
+
+    async def shutdown(self):
+        """Clean shutdown of orchestrator"""
+        try:
+            # Close websocket if open
+            if self.websocket:
+                await self.websocket.close()
+            
+            # Clear all responses
             self.orchestrator_response = []
-            return agent_response
+            
+            # Reset context
+            self.context = OrchestrationContext()
+            
+            logfire.info("Orchestrator shutdown complete")
+            
+        except Exception as e:
+            logfire.error(f"Error during shutdown: {str(e)}")
+            raise
