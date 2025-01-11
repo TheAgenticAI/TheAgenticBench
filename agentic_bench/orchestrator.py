@@ -78,6 +78,7 @@ class OrchestrationContext:
         self.retry_counts: Dict[str, int] = {}
         self.max_retries: int = 3
         self.chat_history: List[dict] = []
+        self.last_code_block: Optional[Dict[str, Any]] = None
 
 # Main Orchestrator Class
 class SystemOrchestrator:
@@ -161,7 +162,10 @@ class SystemOrchestrator:
             executor_system_message = "A computer terminal that performs no other action than running Python scripts or sh shell scripts"
             
             executor_type = os.environ.get("AGENTIC_BENCH_EXECUTOR")
+            print()
+            print(f"Executor type from env : {executor_type}")
             if executor_type in os.environ.get("AGENTIC_BENCH_SUPPORTED_EXECUTORS", []):
+                print(f"Executor type in supported executors from env:  {executor_type}")
                 executor = DockerCodeExecutor() if executor_type == "Docker" else LocalCodeExecutor()
                 
                 self.executor_deps = ExecutorDependencies(
@@ -320,9 +324,38 @@ class SystemOrchestrator:
                     user_message=instruction,
                     deps=self.coder_deps
                 )
+
+                # Parse the response to extract code block info
+                if success:
+                    # Extract dependencies and content from response string
+                    response_parts = response.split(" dependencies=")
+                    if len(response_parts) > 1:
+                        dependencies_content = response_parts[1].split(" content=", 1)
+                        if len(dependencies_content) > 1:
+                            try:
+                                # Parse dependencies list from string
+                                dependencies = eval(dependencies_content[0])  # This will convert "[]" to actual empty list
+                                # Extract content (removing surrounding quotes if present)
+                                content = dependencies_content[1].strip("'")
+                                
+                                # Store in context for Executor to use
+                                self.context.last_code_block = {
+                                    "dependencies": dependencies,
+                                    "content": content
+                                }
+                            except Exception as e:
+                                logfire.error(f"Failed to parse coder response: {e}")
+
+                print()
+                print(f"Response from Coder Agent : {response}")
+                print()
+
             elif isinstance(agent, Executor):
+                # Use the stored code block from context
+                if self.context.last_code_block:
+                    self.executor_deps.content = self.context.last_code_block
                 success, response, messages = await agent.generate_reply(
-                    user_message=instruction,
+                    user_message="Execute the code",
                     deps=self.executor_deps
                 )
             elif isinstance(agent, WebSurfer):
@@ -333,7 +366,7 @@ class SystemOrchestrator:
                 )
             else:  # FileSurfer
                 success, response, messages = await agent.generate_reply(
-                    instruction=instruction
+                    user_message=instruction
                 )
 
             # Update result
@@ -368,10 +401,40 @@ class SystemOrchestrator:
     async def critique_execution(self, task: str, output: str, current_state: str) -> Tuple[bool, Optional[CritiqueOutput], Optional[str]]:
         """Critique agent execution and determine next steps"""
         try:
-            critique_prompt = """You are a critique agent. Evaluate the output and determine if:
-            1. The task is complete
-            2. The output is satisfactory
-            3. Any improvements are needed
+            critique_prompt = """You are a critique agent. Your job is to critique the output of the agent that just executed and then decide if the task is complete or if we need to continue with the next agent.
+
+            <rules>
+
+                <input_processing>
+                    - You have been provided with the task description, the current plan to be followed, and the output of the agent that just executed.
+                    - You have to look at the plan and decide firstly what is our progress currently relative to the plan.
+                    - You have to decide if the task is complete or if we need to continue with the next agent.
+                    - You have to provide feedback on the output of the agent that just executed.
+                </input_processing>
+
+                <output_processing>
+                    - You need to output a JSON with keys "feedback", "terminate", and optionally "final_response".
+
+                    <feedback> 
+                        - You need to provide feedback on the output of the agent that just executed.
+                        - The feedback should be verbose and should contain all the necessary details.
+                        - The main goal with this feedback is that we should be able to understand what went wrong and what went right with the output.
+                        - Highlight things that were done correctly and things that were done incorrectly.
+                        - You also need to provide feedback on the progress of the task relative to the plan inside the feedback key itself in the output JSON. When giving progress feedback, you need to compare the current state with the plan and then provide feedback. Maybe compare the number of steps completed with the total number of steps in the plan.
+                    </feedback>
+
+                    <terminate>
+                        - The "terminate" key should be a boolean value.
+                        - If the task is complete and we do not need to continue with any other agents, then the value should be True.
+                        - If the task is not complete and we need to continue with the next agent, then the value should be False.
+                        - If terminate is True then you have to provide the final_response key in the output. This is a super critical key and should contain the final response to the original request.
+                        - If terminate is False then you do not need to provide the final_response key.
+                        - The final response key is the actual answer and so you need to output the content in the same manner inside the final_response key as you would output the final answer.
+                    </terminate>
+
+                </output_processing>
+
+            </rules>
             
             Output JSON with 'feedback', 'terminate', and optional 'final_response' keys."""
 

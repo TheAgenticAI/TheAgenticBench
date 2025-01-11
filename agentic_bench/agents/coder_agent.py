@@ -188,7 +188,8 @@ class Executor:
                 )
 
             except Exception as e:
-                return (False, f"Error executing code: {str(e)}")
+                print(f"Error details: {str(e)}")
+                raise e
 
     def extract_execution_request(
         self, markdown_text: str
