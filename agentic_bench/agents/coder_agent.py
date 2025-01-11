@@ -10,6 +10,8 @@ from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.tools import AgentDeps
 from typing import List, Type, Union, Callable, Awaitable, Literal, Tuple, Any
+import tokenize
+from io import StringIO
 
 from agentic_bench.utils import CancellationToken
 from agentic_bench.utils.executors.executor_utils import CodeBlock
@@ -19,6 +21,17 @@ from agentic_bench.utils.executors.executor_utils._base import CodeExecutor
 from agentic_bench.utils.oai_client import get_client
 
 load_dotenv()
+coder_system_message = """You are a helpful AI assistant. Solve tasks using your coding and language skills.
+    In the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.
+        1. When you need to collect info, use the code to output the info you need, for example, browse or search the web, download/read a file, print the content of a webpage or a file, get the current date/time, check the operating system. After sufficient info is printed and the task is ready to be solved based on your language skill, you can solve the task by yourself.
+        2. When you need to perform some task with code, use the code to perform the task and output the result. Finish the task smartly.
+    Solve the task step by step if you need to. If a plan is not provided, explain your plan first. Be clear which step uses code, and which step uses your language skill.
+    When using code, you must indicate the script type in the code block. The user cannot provide any other feedback or perform any other action beyond executing the code you suggest. The user can't modify your code. So do not suggest incomplete code which requires users to modify. Don't use a code block if it's not intended to be executed by the user.
+    If you want the user to save the code in a file before executing it, put # filename: <filename> inside the code block as the first line. Don't include multiple code blocks in one response. Do not ask users to copy and paste the result. Instead, use 'print' function for the output when relevant. Check the execution result returned by the user.
+    If the result indicates there is an error, fix the error and output the code again. Suggest the full code instead of partial code or code changes. If the error can't be fixed or if the task is not solved even after the code is executed successfully, analyze the problem, revisit your assumption, collect additional info you need, and think of a different approach to try.
+    When you find an answer, verify the answer carefully. Include verifiable evidence in your response if possible.
+    Reply "TERMINATE" in the end when everything is done."""
+            
 
 @dataclass
 class CoderDependencies:
@@ -32,6 +45,7 @@ class CoderResult(BaseModel):
         description="All the packages name that has to be installed before the code execution"
     )
     content: str = Field(description="Response content in the form of code")
+    sample_input:str=Field(description="Simulation of human input for execution of the code")
 
 class ExecutorDependencies(BaseModel):
     executor: CodeExecutor
@@ -70,14 +84,24 @@ class CoderAgent:
             # Use raw string to prevent escape character issues
             return self._system_prompt
 
+    def is_python_code(self,content):
+        try:
+            tokens = tokenize.generate_tokens(StringIO(content).readline)
+            for _ in tokens:
+                pass  # Simply iterate through the tokens
+            return True
+        except tokenize.TokenError:
+            return False
+    
     def ensure_code_block_format(self, code_content: str) -> str:
         """Ensure code is properly wrapped in markdown code block markers"""
         # Remove existing markers if present
-        code = code_content.replace("```python", "").replace("```", "").strip()
+        if("```python" in code_content):
+            return code_content
 
         # Check if it's a proper Python code (has imports or typical Python syntax)
-        if "import" in code or "def" in code or "class" in code:
-            return f"```python\n{code}\n```"
+        if self.is_python_code(code_content):
+            return f"```python\n{code_content}\n```"
         return code_content
 
     async def generate_reply(
@@ -90,7 +114,6 @@ class CoderAgent:
             print(f"Dependencies: {deps}\n")
 
             result = await self._agent.run(user_message, deps=deps)
-
             if hasattr(result, "data"):
                 # Ensure code is properly formatted
                 content = (
@@ -103,6 +126,7 @@ class CoderAgent:
                 # Build properly formatted response
                 response = f"terminated={getattr(result.data, 'terminated', True)} "
                 response += f"dependencies={getattr(result.data, 'dependencies', [])} "
+                response += f"sample_input={getattr(result.data,'sample_input',"")} "
                 response += f"content='{formatted_content}'"
 
                 return True, response, result.all_messages()
@@ -158,6 +182,7 @@ class Executor:
                             code=code_block,
                             packages=response_block["dependencies"],
                             language=code_lang,
+                            sample_input=response_block['sample_input'] if response_block['sample_input'] else ""
                         )
                     ]
 
@@ -176,7 +201,7 @@ class Executor:
                             )
                         else:
                             return (
-                                False,
+                                True,
                                 f"The script ran, then exited with Unix exit code: {result.exit_code}\nIts output was:\n{result.output}",
                             )
                     else:

@@ -292,10 +292,11 @@ $functions"""
         file_names: List[Path] = []
         exitcode = 0
         for code_block in code_blocks:
-            lang, code, packages = (
+            lang, code, packages,sample_input = (
                 code_block.language,
                 code_block.code,
                 code_block.packages,
+                code_block.sample_input
             )
             lang = lang.lower()
 
@@ -369,6 +370,7 @@ $functions"""
                     cwd=self._work_dir,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
+                    stdin=asyncio.subprocess.PIPE,
                     env=env,
                 )
             )
@@ -377,7 +379,7 @@ $functions"""
                 proc = await task
                 print("task completed", proc)
                 stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(), self._timeout
+                    proc.communicate(sample_input.encode()), self._timeout
                 )
                 exitcode = proc.returncode or 0
 

@@ -20,7 +20,7 @@ from agentic_bench.agents.file_surfer import FileSurfer, FileToolDependencies, R
 from agentic_bench.agents.web_surfer import WebSurfer
 from agentic_bench.agents.coder_agent import (
     CoderAgent, CoderDependencies, Executor, ExecutorDependencies,
-    DockerCodeExecutor, LocalCodeExecutor
+    DockerCodeExecutor, LocalCodeExecutor, CoderResult, coder_system_message
 )
 
 load_dotenv()
@@ -140,7 +140,6 @@ class SystemOrchestrator:
 
             # Initialize Coder Agent
             coder_description = "A helpful and general-purpose AI assistant that has strong language skills, Python skills, and Linux command line skills."
-            coder_system_message = """You are a helpful AI assistant. Solve tasks using your coding and language skills."""
             
             self.coder_deps = CoderDependencies(
                 description=coder_description,
@@ -152,6 +151,7 @@ class SystemOrchestrator:
                 model=self.model,
                 name="Coder Agent",
                 deps_type=CoderDependencies,
+                result_type=CoderResult
             )
             coder_agent = CoderAgent(
                 agent=cod_agent,
@@ -342,19 +342,28 @@ class SystemOrchestrator:
                     # Extract dependencies and content from response string
                     response_parts = response.split(" dependencies=")
                     if len(response_parts) > 1:
-                        dependencies_content = response_parts[1].split(" content=", 1)
+                        dependencies_content = response_parts[1].split(" sample_input=", 1)
                         if len(dependencies_content) > 1:
                             try:
                                 # Parse dependencies list from string
-                                dependencies = eval(dependencies_content[0])  # This will convert "[]" to actual empty list
-                                # Extract content (removing surrounding quotes if present)
-                                content = dependencies_content[1].strip("'")
+                                dependencies = eval(dependencies_content[0])  # Convert string to actual list
                                 
-                                # Store in context for Executor to use
-                                self.context.last_code_block = {
-                                    "dependencies": dependencies,
-                                    "content": content
-                                }
+                                # Further split to extract sample_input and content
+                                sample_input_content = dependencies_content[1].split(" content=", 1)
+                                if len(sample_input_content) > 1:
+                                    # Extract sample_input (removing surrounding quotes if present)
+                                    sample_input = sample_input_content[0].strip("'")
+                                    # Extract content (removing surrounding quotes if present)
+                                    content = sample_input_content[1].strip("'")
+                                    
+                                    # Store in context for Executor to use
+                                    self.context.last_code_block = {
+                                        "dependencies": dependencies,
+                                        "sample_input": sample_input,
+                                        "content": content
+                                    }
+                                    print("response block to send to executor", self.context.last_code_block)
+
                             except Exception as e:
                                 logfire.error(f"Failed to parse coder response: {e}")
 

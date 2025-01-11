@@ -12,6 +12,7 @@ class CodeBlock:
     code: str
     packages: List
     language: str
+    sample_input:str
 
 @dataclass
 class CodeResult:
