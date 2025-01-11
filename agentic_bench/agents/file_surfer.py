@@ -96,6 +96,7 @@ class FileSurfer:
         try:
             self._agent: Agent = agent
             self._name: str = name
+            self.description = "An agent that uses tools to read and navigate local files with robust error handling."
             self._browser: RequestsMarkdownBrowser = browser or RequestsMarkdownBrowser(
                 viewport_size=viewport_size, downloads_folder=downloads_folder
             )

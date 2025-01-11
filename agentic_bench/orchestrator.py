@@ -204,6 +204,7 @@ class SystemOrchestrator:
     async def generate_plan(self, task: str) -> Tuple[bool, str, Optional[str]]:
         """Generate initial plan with error handling"""
         try:
+            agent_descriptions = "\n".join(f"Name: {agent.name}\nDescription: {agent.description}\n" for agent in self.agents)
             planner_prompt = f"""You only need to answer in a string format. Never perform any tool calls for any agents, Just make a plan (string format) based on the information you have.
 
             Based on the team composition, and known and unknown facts, please devise a short bullet-point plan for addressing the original request. Remember, there is no requirement to involve all team members -- a team member's particular expertise may not be needed for this task.
@@ -218,25 +219,27 @@ class SystemOrchestrator:
                 <output_processing>
                     - You need to provide a plan in a string format.
                     - The agents in the team are not directly under you so you cannot give any tool calls since you have no access to any tools whatsoever. 
-                    - You need to plan in such a way that a combination of team members can be used if needed to handle and solve the task at hand. 
-                    - We always first use the RAG Agent to get the information from the documents and then use the Web Searcher to get the information from the web if the RAG Agent fails to provide the information.
+                    - You need to plan in such a way that a combination of team members can be used if needed to handle and solve the task at hand.
                 </output_processing>
 
                 <critical>
                     - You always need to generate a plan that satisfies the request strictly using the agents that we have.
-                    - Never ever try to answer the question yourself no matter how simple it is actually.
+                     - Never ever try to answer the question yourself no matter how simple it is actually.
+                    - If there are any weblinks/ file paths then never omit them from the plan. Include them as provided by the user, without any modification.
+                    - If there are any instructions in the original question, include them in the plan as is, dont try to deviate from the user provided instructions and try to craft something new in the plan.
+                    - Dont try to add agents unnecessarily to the plan. Use only the agents that are absolutely necessary to solve the task.
                 </critical>
             </rules>
             
-            Available agents: {[agent.name for agent in self.agents]}
-            
-            Output a JSON with a 'plan' key containing the detailed plan."""
+            Available agents and their descriptions: 
+
+            {agent_descriptions}
+            """
 
             planner_agent = Agent(
                 model=self.model,
                 name="Planner Agent",
-                system_prompt=planner_prompt,
-                result_type=PlanModel
+                system_prompt=planner_prompt
             )
             
             start_time = datetime.now()
@@ -246,7 +249,7 @@ class SystemOrchestrator:
             logfire.info(f"Plan generation completed in {execution_time}s")
             logfire.info(f"Planner agent new messages : {plan_result.new_messages()}")
             
-            return True, plan_result.data.plan, None
+            return True, plan_result.data, None
 
         except Exception as e:
             error_msg = f"Plan generation failed: {str(e)}\n{traceback.format_exc()}"
@@ -256,11 +259,14 @@ class SystemOrchestrator:
     async def select_next_agent(self, current_state: str) -> Tuple[bool, Optional[AgentSelectorOutput], Optional[str]]:
         """Select next agent with comprehensive error handling"""
         try:
+            agent_descriptions = "\n".join(f"Name: {agent.name}\nDescription: {agent.description}\n" for agent in self.agents)
             selector_prompt = f"""
             
             You are a selector agent. Your job is to look at the conversation flow and the agents at hand and then correctly decided which agent should speak next. Also when you decide which agent should speak next, you need to provide the instruction that the agent should follow.
 
-            Available agents :  ({[a.name for a in self.agents]}),
+            Available agents and their descriptions :  
+
+            {agent_descriptions}
             
             <rules>
                 <input_processing>
@@ -275,6 +281,12 @@ class SystemOrchestrator:
                     - The "explanation" key should contain the reasoning behind your decision.
 
                 </output_processing>
+
+                <critical>
+                    - You always need to generate a plan that satisfies the request strictly using the agents that we have.
+                    - If there are any weblinks/ file paths then never omit them from the instructions. Include them as provided by the user, without any modification.
+                    - If there are any instructions in the original question, include them in the instruction as is, dont try to deviate from the user provided instruction and try to craft something new.
+                </critical>
             </rules>
             
             """

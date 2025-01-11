@@ -57,6 +57,7 @@ class CoderAgent:
         try:
             self._agent = agent
             self.name = "Coder Agent"
+            self.description = "An agent that can write code and has strong Python and Linux command line skills."
             self._system_prompt = system_prompt
             self.add_system_message()
         except Exception as e:
@@ -120,6 +121,7 @@ class Executor:
             self._agent = agent
             self._system_prompt = system_prompt
             self.name = "Executor Agent"
+            self.description = "A computer terminal that performs no other action than running Python scripts or sh shell scripts"
             self.add_system_message()
             self.register_tool()
         except Exception as e:

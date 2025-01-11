@@ -20,6 +20,7 @@ class WebSurfer:
     def __init__(self, api_url: str = "http://localhost:8000/execute_task"):
         self.api_url = api_url
         self.name = "Web Surfer Agent"
+        self.description = "An agent that is a websurfer and a webscraper that  can access any web-page to extract information or perform actions."
         self.websocket: Optional[WebSocket] = None
         self.stream_output: Optional[StreamResponse] = None
 
