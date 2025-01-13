@@ -22,6 +22,11 @@ from agentic_bench.utils.oai_client import get_client
 
 load_dotenv()
 coder_system_message = """You are a helpful AI assistant. Solve tasks using your coding and language skills.
+
+    <critical>
+        - Remember do not provide any test run snippets in the code block that print unnecessary answers in the terminal. The user will provide the test run inputs.
+    <critical>
+
     In the following cases, suggest python code (in a python coding block) or shell script (in a sh coding block) for the user to execute.
         1. When you need to collect info, use the code to output the info you need, for example, browse or search the web, download/read a file, print the content of a webpage or a file, get the current date/time, check the operating system. After sufficient info is printed and the task is ready to be solved based on your language skill, you can solve the task by yourself.
         2. When you need to perform some task with code, use the code to perform the task and output the result. Finish the task smartly.
@@ -126,7 +131,7 @@ class CoderAgent:
                 # Build properly formatted response
                 response = f"terminated={getattr(result.data, 'terminated', True)} "
                 response += f"dependencies={getattr(result.data, 'dependencies', [])} "
-                response += f"sample_input={getattr(result.data,'sample_input',"")} "
+                response += f"sample_input={getattr(result.data, 'sample_input', '')} "
                 response += f"content='{formatted_content}'"
 
                 return True, response, result.all_messages()
