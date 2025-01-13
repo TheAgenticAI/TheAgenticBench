@@ -22,6 +22,11 @@ from agentic_bench.agents.coder_agent import (
     CoderAgent, CoderDependencies, Executor, ExecutorDependencies,
     DockerCodeExecutor, LocalCodeExecutor, CoderResult, coder_system_message
 )
+from agentic_bench.agents.rag_agent import RAGAgent, RAGDependencies, RAGResult
+from agentic_bench.utils.initializers.graph_initializer import GraphInitializer
+from agentic_bench.utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, \
+    AGENT_DESCRIPTION_FINANCE, AGENT_DESCRIPTION_RESEARCH_PAPERS
+from agentic_bench.utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
 
 load_dotenv()
 
@@ -192,8 +197,59 @@ class SystemOrchestrator:
 
             # Combine all agents
             self.agents = [file_surfer_agent, coder_agent, executor_agent, web_surfer_agent]
+
+            rag_system_prompt = """You are a helpful AI assistant that processes queries using RAG (Retrieval Augmented Generation).
+             Use the provided RAG system to retrieve relevant information and generate comprehensive responses.
+             Always aim to provide accurate and contextual information based on the retrieved content. 
+             If you don't know the answer, just say that you don't know and return a bool of False.
+             Also, tell the user that these entities were used to generate the response.
+
+             <instructions> 
+             1. You only have the ability to perform sequential tool calls, so strictly avoid the parallel ones. 
+             2. If you need multiple points of information then instead of trying to perform parallel tool calls (which you are anyways not permitted to do) , what you need to do is actually combine the requirements into a single instruction/ single tool call.
+
+             </instructions>
+
+             """
+            rag_description = " An AI assistant specialized in answering from users using the data uploaded by user"
+
+            graph_initializer = GraphInitializer(
+                working_dir=WORKING_DIR,
+                domain=DOMAIN,
+                example_queries=EXAMPLE_QUERIES,
+                entity_types=ENTITY_TYPES,
+            )
+
+            ingestion_status = await graph_initializer.ingest_data(pdf_dir=PDF_DIRECTORY)
+            logfire.info(f"Graph memory initialization status: {ingestion_status}")
+
+            if "Graph memory is empty" in ingestion_status:
+                logfire.warn("Skipping RAG Agent initialization: No files or memory.")
+            else:
+                # Initialize RAG Agent dynamically
+                rag_deps = RAGDependencies(
+                    graph_rag=graph_initializer,
+                    description=rag_description,
+                    system_message=rag_system_prompt,
+                )
+
+                self.rag_deps = rag_deps
+
+                rag_agent = Agent(
+                    model=self.model,
+                    name="RAG Agent",
+                    deps_type=RAGDependencies,
+                    result_type=RAGResult,
+                    system_prompt=rag_system_prompt,
+                )
+
+                rag_agent_instance = RAGAgent(agent=rag_agent, system_prompt=rag_system_prompt, description = AGENT_DESCRIPTION_FINANCE)
+                self.agents.append(rag_agent_instance)
+                logfire.info("RAG Agent successfully initialized.")
+
             logfire.info(f"Successfully initialized {len(self.agents)} agents")
-            
+            logfire.info(f"Agents: {[agent.name for agent in self.agents]}")
+
             return self.agents
 
         except Exception as e:
@@ -385,6 +441,16 @@ class SystemOrchestrator:
                     websocket=self.websocket,
                     stream_output=self.stream_output
                 )
+            elif isinstance(agent, RAGAgent): # RAG Agent
+                success, response, messages = await agent.generate_reply(
+                    instruction,
+                    deps=self.rag_deps
+                )
+                # self.chat_history = [*self.chat_history, *messages]
+                # logfire.info("RAG response received and messages stored")
+                # print(f"RAG response: {response}")
+                # logfire.info(f"RAG messages: {messages}")
+
             else:  # FileSurfer
                 success, response, messages = await agent.generate_reply(
                     user_message=instruction

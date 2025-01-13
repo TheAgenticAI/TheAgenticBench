@@ -1,0 +1,19 @@
+def fibonacci_sequence(n):
+    """
+    Calculate the Fibonacci sequence up to a certain number n.
+
+    :param n: The upper limit for the Fibonacci sequence elements.
+    :return: A list containing the Fibonacci sequence up to n.
+    """
+    if n <= 0:
+        return []
+    sequence = [0, 1]
+    while sequence[-1] + sequence[-2] <= n:
+        sequence.append(sequence[-1] + sequence[-2])
+    return sequence
+
+# Example usage
+if __name__ == "__main__":
+    number = 100  # Calculate Fibonacci sequence up to 100
+    result = fibonacci_sequence(number)
+    print(f"Fibonacci sequence up to {number}: {result}")

@@ -50,7 +50,9 @@ To make progress on the request, please answer the following questions, includin
     - You always need to execute the code after the coder agent replies with a code snippet.
     - If the Coder Agent was selected and returned a code snippet, the Executor Agent should be selected next.
     - If the Executor Agent returned a proper error free output, then only you should proceed and terminate the task/ mark the code as correct, do not just look at the code and assume that it will be correct.
-
+    - If RAG agent is present, it should be called when we have an information retrieval query. Or alteast a part of the query is related to information retrieval.
+    - If RAG agent is present, it should be the first choice for information retrieval, if it does not satisfy the query completely then we use Web Surfer Agent in combination after RAG Agent.
+    
 Please output an answer in pure JSON format according to the following schema. The JSON object must be parsable as-is. DO NOT OUTPUT ANYTHING OTHER THAN JSON, AND DO NOT DEVIATE FROM THIS SCHEMA:
 
     {{
