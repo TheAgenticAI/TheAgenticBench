@@ -8,7 +8,7 @@ from dataclasses import asdict
 import logfire
 from fastapi import WebSocket
 from dotenv import load_dotenv
-
+from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai import Agent
 from agentic_bench.utils.stream_response_format import StreamResponse
@@ -82,7 +82,8 @@ class OrchestrationContext:
         self.execution_history: List[AgentExecutionResult] = []
         self.retry_counts: Dict[str, int] = {}
         self.max_retries: int = 3
-        self.chat_history: List[dict] = []
+        self.chat_history: List[ModelMessage] = []
+        self.agent_selector_chat_history: List[ModelMessage] = []
         self.last_code_block: Optional[Dict[str, Any]] = None
 
 # Main Orchestrator Class
@@ -312,7 +313,7 @@ class SystemOrchestrator:
             logfire.error(error_msg)
             return False, "", error_msg
 
-    async def select_next_agent(self, current_state: str) -> Tuple[bool, Optional[AgentSelectorOutput], Optional[str]]:
+    async def select_next_agent(self, plan: str) -> Tuple[bool, Optional[AgentSelectorOutput], Optional[str]]:
         """Select next agent with comprehensive error handling"""
         try:
             agent_descriptions = "\n".join(f"Name: {agent.name}\nDescription: {agent.description}\n" for agent in self.agents)
@@ -354,9 +355,10 @@ class SystemOrchestrator:
                 result_type=AgentSelectorOutput
             )
 
-            result = await selector_agent.run(current_state)
+            result = await selector_agent.run(user_prompt=plan, message_history=self.context.agent_selector_chat_history)
             logfire.info(f"Agent selection completed: {result.data}")
             logfire.info(f"Selector agent new messages : {result.new_messages()}")
+            self.context.agent_selector_chat_history.extend(result.new_messages())
             return True, result.data, None
 
         except Exception as e:
@@ -485,15 +487,15 @@ class SystemOrchestrator:
 
         return result
 
-    async def critique_execution(self, task: str, output: str, current_state: str) -> Tuple[bool, Optional[CritiqueOutput], Optional[str]]:
+    async def critique_execution(self, task: str, output: str, plan: str, execution_history: List[AgentExecutionResult]) -> Tuple[bool, Optional[CritiqueOutput], Optional[str]]:
         """Critique agent execution and determine next steps"""
         try:
-            critique_prompt = """You are a critique agent. Your job is to critique the output of the agent that just executed and then decide if the task is complete or if we need to continue with the next agent.
+            critique_prompt = """You are a critique agent. Your job is to critique the output of the agent that just executed, take into consideration the previous outputs of other agents also and then decide if the task is complete or if we need to continue with the next agent.
 
             <rules>
 
                 <input_processing>
-                    - You have been provided with the task description, the current plan to be followed, and the output of the agent that just executed.
+                    - You have been provided with the task description, the current plan to be followed, the output of the latest agent that executed and the output execution history of the previous agents that have finished execution.
                     - You have to look at the plan and decide firstly what is our progress currently relative to the plan.
                     - You have to decide if the task is complete or if we need to continue with the next agent.
                     - You have to provide feedback on the output of the agent that just executed.
@@ -507,7 +509,7 @@ class SystemOrchestrator:
                         - The feedback should be verbose and should contain all the necessary details.
                         - The main goal with this feedback is that we should be able to understand what went wrong and what went right with the output.
                         - Highlight things that were done correctly and things that were done incorrectly.
-                        - You also need to provide feedback on the progress of the task relative to the plan inside the feedback key itself in the output JSON. When giving progress feedback, you need to compare the current state with the plan and then provide feedback. Maybe compare the number of steps completed with the total number of steps in the plan.
+                        - You also need to provide feedback on the progress of the task relative to the plan inside the feedback key itself in the output JSON. When giving progress feedback, you need to compare the current state with the plan and then provide feedback. Maybe compare the number of steps completed with the total number of steps in the plan. Take into consideration the execution history of previous agents while comparing with the plan.
                     </feedback>
 
                     <terminate>
@@ -525,6 +527,11 @@ class SystemOrchestrator:
             
             Output JSON with 'feedback', 'terminate', and optional 'final_response' keys."""
 
+            previous_execution_results = "\n".join(
+                f"Agent: {result.agent_name}\nOutput: {result.output if result.success else result.error_message}\n"
+                for result in execution_history[:-1]  # Exclude the last element
+            )
+
             critique_agent = Agent(
                 model=self.model,
                 name="Critique Agent",
@@ -532,8 +539,8 @@ class SystemOrchestrator:
                 result_type=CritiqueOutput
             )
             
-            context = f"Task: {task}\nCurrent State: {current_state}\nOutput: {output}"
-            result = await critique_agent.run(context)
+            context = f"Task: {task}\nPlan: {plan}\nLatest Output:{output}\nPrevious Execution Results: {previous_execution_results}"
+            result = await critique_agent.run(user_prompt=context)
             logfire.info(f"Critique completed: {result.data}")
             logfire.info(f"Critique agent new messages : {result.new_messages()}")
             
@@ -591,11 +598,10 @@ class SystemOrchestrator:
                 return [asdict(stream_output)]
 
             self.context.current_plan = plan
-            current_state = plan
 
             while True:
                 # Select next agent
-                success, selector_output, error = await self.select_next_agent(current_state)
+                success, selector_output, error = await self.select_next_agent(plan)
                 if not success:
                     stream_output.steps.append(f"Agent selection failed: {error}")
                     continue
@@ -633,7 +639,7 @@ class SystemOrchestrator:
 
                 # Critique execution
                 critique_success, critique_result, critique_error = await self.critique_execution(
-                    task, result.output, current_state
+                    task, result.output, plan, self.context.execution_history
                 )
 
                 if not critique_success:
@@ -648,7 +654,7 @@ class SystemOrchestrator:
                     await self._safe_websocket_send(stream_output)
                     break
 
-                current_state = result.output
+                plan = result.output
                 
                 # Update stream output with progress
                 stream_output.steps.append(f"Completed step with {selected_agent.name}")
