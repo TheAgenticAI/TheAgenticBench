@@ -16,6 +16,8 @@ from dataclasses import asdict
 
 from agentic_bench.utils.stream_response_format import StreamResponse
 
+TIMEOUT = 9999999999999999999999999999999999999999999
+
 class WebSurfer:
     def __init__(self, api_url: str = "http://localhost:8000/execute_task"):
         self.api_url = api_url
@@ -28,7 +30,8 @@ class WebSurfer:
         self, instruction: str
     ) -> Tuple[int, List[Dict[str, Any]]]:
         """Make API call to the web scraping service"""
-        async with aiohttp.ClientSession() as session:
+        session_timeout = aiohttp.ClientTimeout(total=None,sock_connect=TIMEOUT,sock_read=TIMEOUT)
+        async with aiohttp.ClientSession(timeout=session_timeout) as session:
             final_json_response = []
             try:
                 payload = {"command": instruction}
