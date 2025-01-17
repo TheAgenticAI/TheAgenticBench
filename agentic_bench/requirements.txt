@@ -92,3 +92,5 @@ wrapt==1.17.0
 XlsxWriter==3.2.0
 yarl==1.18.3
 zipp==3.21.0
+fast-graphrag==0.0.4
+llama_parse==0.5.19
