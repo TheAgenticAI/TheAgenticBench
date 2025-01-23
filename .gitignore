@@ -2,3 +2,7 @@
 .env.local
 .venv/
 terminal_logs/*
+data/
+result/
+save_folder/
+saved_path/
