@@ -4,9 +4,9 @@ from typing import Optional, List
 from agentic_bench.orchestrator import SystemOrchestrator
 
 app: FastAPI = FastAPI()
-orchestrator: SystemOrchestrator = SystemOrchestrator()
 
 async def generate_response(task: str, websocket: Optional[WebSocket] = None):
+    orchestrator: SystemOrchestrator = SystemOrchestrator()
     return await orchestrator.run(task, websocket)
 
 @app.get("/agent/chat")
