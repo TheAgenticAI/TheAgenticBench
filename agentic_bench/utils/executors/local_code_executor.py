@@ -17,7 +17,10 @@ from .executor_utils import (
     FunctionWithRequirementsStr,
 )
 from typing_extensions import ParamSpec
-
+from dataclasses import asdict
+import json
+from agentic_bench.utils.stream_response_format import StreamResponse
+from fastapi import WebSocket
 from .executor_utils._common import (
     PYTHON_VARIANTS,
     CommandLineCodeResult,
@@ -151,6 +154,8 @@ $functions"""
         #     self._virtual_env_context: Optional[SimpleNamespace] = self.create_venv(work_dir)
         # else:
         self._virtual_env_context: Optional[SimpleNamespace] = virtual_env_context
+        self.websocket:Optional[WebSocket]= None
+        self.stream_output:Optional[StreamResponse] = None
 
     def format_functions_for_prompt(
         self, prompt_template: str = FUNCTION_PROMPT_TEMPLATE
@@ -194,6 +199,13 @@ $functions"""
         return self._work_dir
 
     async def create_venv(self, work_dir):
+        if self.stream_output and self.websocket:
+            self.stream_output.steps.append(
+                "Creating a secure environment for the code to be executed"
+            )
+            await self.websocket.send_text(
+                json.dumps(asdict(self.stream_output))
+            )
         venv_dir = work_dir / ".venv"
         venv_builder = venv.EnvBuilder(with_pip=True)
         venv_builder.create(venv_dir)
@@ -209,7 +221,16 @@ $functions"""
         required_packages = code_blocks[0].packages
         print("required packages", required_packages)
         if len(required_packages) > 0:
-            logging.info("Ensuring packages are installed in executor.")
+            log="Ensuring packages are installed in executor."
+            logging.info(log)
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append(
+                    log
+                )
+                await self.websocket.send_text(
+                    json.dumps(asdict(self.stream_output))
+                )
+
             cmd_args = ["-m", "pip", "install"]
             cmd_args.extend(required_packages)
             print("cmd args", cmd_args)
@@ -237,6 +258,13 @@ $functions"""
             cancellation_token.link_future(task)
             proc = None
             try:
+                if self.stream_output and self.websocket:
+                    self.stream_output.steps.append(
+                        "Installing the code dependencies in your local environment before the code execution"
+                    )
+                    await self.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
                 proc = await task
                 stdout, stderr = await asyncio.wait_for(
                     proc.communicate(), self._timeout
@@ -267,7 +295,7 @@ $functions"""
         self._setup_functions_complete = True
 
     async def execute_code_blocks(
-        self, code_blocks: List[CodeBlock], cancellation_token: CancellationToken
+        self, code_blocks: List[CodeBlock],websocket:WebSocket,stream_output:StreamResponse, cancellation_token: CancellationToken
     ) -> CommandLineCodeResult:
         """(Experimental) Execute the code blocks and return the result.
 
@@ -278,6 +306,8 @@ $functions"""
         Returns:
             CommandLineCodeResult: The result of the code execution."""
 
+        self.websocket=websocket
+        self.stream_output=stream_output
         if not self._setup_functions_complete:
             print("setting up functions")
             await self._setup_functions(code_blocks, cancellation_token)
@@ -320,7 +350,13 @@ $functions"""
                     output="Filename is not in the workspace",
                     code_file=None,
                 )
-
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append(
+                    f"Saving the code in a file under the directory: {self._work_dir}"
+                )
+                await self.websocket.send_text(
+                    json.dumps(asdict(self.stream_output))
+                )
             if filename is None:
                 # create a file with an automatically generated name
                 code_hash = sha256(code.encode()).hexdigest()
@@ -376,6 +412,13 @@ $functions"""
             )
             cancellation_token.link_future(task)
             try:
+                if self.stream_output and self.websocket:
+                    self.stream_output.steps.append(
+                        "Executing the generated code in your safe environment"
+                    )
+                    await self.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
                 proc = await task
                 print("task completed", proc)
                 stdout, stderr = await asyncio.wait_for(

@@ -10,7 +10,10 @@ from hashlib import sha256
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Callable, ClassVar, List, Optional, ParamSpec, Type, Union
-
+from dataclasses import asdict
+import json
+from agentic_bench.utils.stream_response_format import StreamResponse
+from fastapi import WebSocket
 from agentic_bench.utils import CancellationToken
 from .executor_utils import (
     CodeBlock,
@@ -146,6 +149,8 @@ $functions"""
         self._functions = functions
         # Setup could take some time so we intentionally wait for the first code block to do it.
         self._setup_functions_complete = False
+        self.websocket:Optional[WebSocket]= None
+        self.stream_output:Optional[StreamResponse] = None
         # else:
         #     self._setup_functions_complete = True
 
@@ -176,9 +181,15 @@ $functions"""
 
     async def install_packages(self, packages):
         import docker
-
         client = docker.from_env()
         command = f"pip install {' '.join(packages)}"
+        if self.stream_output and self.websocket:
+            self.stream_output.steps.append(
+                "Installing the code dependencies in your docker environment before the code execution"
+            )
+            await self.websocket.send_text(
+                json.dumps(asdict(self.stream_output))
+            )
         exit_code, output = self._container.exec_run(command)
         if exit_code == 0:
             print("packages installed successfully")
@@ -191,7 +202,16 @@ $functions"""
         await self.start()
         required_packages = code_blocks[0].packages
         if len(required_packages) > 0:
-            logging.info("Ensuring packages are installed in executor.")
+            log="Ensuring packages are installed in executor."
+            logging.info(log)
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append(
+                    log
+                )
+                await self.websocket.send_text(
+                    json.dumps(asdict(self.stream_output))
+                )
+
 
             packages = shlex.join(required_packages)
             # result = await self._execute_code_dont_check_setup(
@@ -240,7 +260,13 @@ $functions"""
                 outputs.append("Filename is not in the workspace")
                 last_exit_code = 1
                 break
-
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append(
+                    f"Saving the code in a file under the directory: {self._work_dir}"
+                )
+                await self.websocket.send_text(
+                    json.dumps(asdict(self.stream_output))
+                )
             if not filename:
                 filename = f"tmp_code_{sha256(code.encode()).hexdigest()}.{lang}"
 
@@ -250,7 +276,13 @@ $functions"""
             files.append(code_path)
 
             command = ["timeout", str(self._timeout), lang_to_cmd(lang), filename]
-
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append(
+                    "Executing the generated code in your safe environment"
+                )
+                await self.websocket.send_text(
+                    json.dumps(asdict(self.stream_output))
+                )
             result = await asyncio.to_thread(self._container.exec_run, command)  # type: ignore
             exit_code = result.exit_code
             output = result.output.decode("utf-8")
@@ -268,7 +300,8 @@ $functions"""
         )
 
     async def execute_code_blocks(
-        self, code_blocks: List[CodeBlock], cancellation_token: CancellationToken
+        self, code_blocks: List[CodeBlock], 
+        websocket:WebSocket,stream_output:StreamResponse, cancellation_token: CancellationToken
     ) -> CommandLineCodeResult:
         """(Experimental) Execute the code blocks and return the result.
 
@@ -277,7 +310,8 @@ $functions"""
 
         Returns:
             CommandlineCodeResult: The result of the code execution."""
-
+        self.websocket=websocket
+        self.stream_output=stream_output
         def raise_not_implemented() -> None:
             raise NotImplementedError(
                 "Cancellation is not yet supported for DockerCommandLineCodeExecutor"

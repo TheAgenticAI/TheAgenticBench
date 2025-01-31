@@ -377,7 +377,8 @@ class SystemOrchestrator:
             if isinstance(agent, CoderAgent):
                 success, response, messages = await agent.generate_reply(
                     user_message=instruction,
-                    deps=self.coder_deps
+                    deps=self.coder_deps,websocket=self.websocket,
+                    stream_output=self.stream_output
                 )
 
                 # Parse the response to extract code block info
