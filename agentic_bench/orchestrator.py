@@ -193,7 +193,7 @@ class SystemOrchestrator:
             )
 
             # Initialize Web Surfer
-            web_surfer_agent = WebSurfer(api_url="http://localhost:8000/v1/web/session/stream")
+            web_surfer_agent = WebSurfer(api_url="http://localhost:8000/execute_task")
 
             # Combine all agents
             self.agents = [file_surfer_agent, coder_agent, executor_agent, web_surfer_agent]

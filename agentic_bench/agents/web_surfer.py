@@ -19,7 +19,7 @@ from agentic_bench.utils.stream_response_format import StreamResponse
 TIMEOUT = 9999999999999999999999999999999999999999999
 
 class WebSurfer:
-    def __init__(self, api_url: str = "http://localhost:8000/v1/web/session/stream"):
+    def __init__(self, api_url: str = "http://localhost:8000/execute_task"):
         self.api_url = api_url
         self.name = "Web Surfer Agent"
         self.description = "An agent that is a websurfer and a webscraper that  can access any web-page to extract information or perform actions."
@@ -34,7 +34,7 @@ class WebSurfer:
         async with aiohttp.ClientSession(timeout=session_timeout) as session:
             final_json_response = []
             try:
-                payload = {"cmd": instruction}
+                payload = {"command": instruction}
                 async with session.post(self.api_url, json=payload) as response:
                     if response.status != 200:
                         error_text = await response.text()
@@ -100,7 +100,7 @@ class WebSurfer:
                 args_data = {
                     "terminated": True,
                     "dependencies": [],
-                    "content": final_json["message"].strip(),
+                    "content": final_json["message"][16:].strip(),
                 }
 
             response = ModelResponse(
@@ -125,7 +125,7 @@ class WebSurfer:
             )
 
             messages = [request, response, tool_return]
-            return True, final_json["message"].strip(), messages
+            return True, final_json["message"][16:].strip(), messages
 
         except Exception as e:
             error_message = f"Failed to generate web surfer reply: {str(e)}"
