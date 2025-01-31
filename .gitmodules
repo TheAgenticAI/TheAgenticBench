@@ -1,0 +1,3 @@
+[submodule "autoscrapper"]
+	path = autoscrapper
+	url = https://github.com/TheAgenticAI/TheAgenticBrowser.git
