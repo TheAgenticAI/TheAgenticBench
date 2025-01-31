@@ -14,10 +14,10 @@ services:
 
   autoscrapper:
     build:
-      context: ./autoscrapper
+      context: ./TheAgenticBrowser
       dockerfile: Dockerfile
     volumes:
-      - ./autoscrapper:/app
+      - ./TheAgenticBrowser:/app
     env_file:
       - .env
     restart: always

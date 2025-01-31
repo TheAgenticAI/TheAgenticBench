@@ -180,3 +180,6 @@ result/
 save_folder/
 saved_path/
 code_files/
+benchvenv
+agentic_bench/graph_data_folder
+agentic_bench/Pdf_data_folder

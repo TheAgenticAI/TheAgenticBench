@@ -1,18 +1,21 @@
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass,asdict
 from dotenv import load_dotenv
 import logfire
 import os
 import re
+import json
+import time
 from pydantic import Field, BaseModel
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIModel
+from fastapi import WebSocket
 from pydantic_ai.tools import AgentDeps
-from typing import List, Type, Union, Callable, Awaitable, Literal, Tuple, Any
+from typing import List, Type, Union, Callable, Awaitable, Literal, Tuple, Any, Optional
 import tokenize
 from io import StringIO
-
+from agentic_bench.utils.stream_response_format import StreamResponse
 from agentic_bench.utils import CancellationToken
 from agentic_bench.utils.executors.executor_utils import CodeBlock
 from agentic_bench.utils.executors import LocalCommandLineCodeExecutor as LocalCodeExecutor
@@ -78,6 +81,8 @@ class CoderAgent:
             self.name = "Coder Agent"
             self.description = "An agent that can write code and has strong Python and Linux command line skills."
             self._system_prompt = system_prompt
+            self.websocket:Optional[WebSocket]=None
+            self.stream_output: Optional[StreamResponse] = None
             self.add_system_message()
         except Exception as e:
             logfire.error(f"Failed to initialize CoderAgent: {e}")
@@ -89,8 +94,11 @@ class CoderAgent:
             # Use raw string to prevent escape character issues
             return self._system_prompt
 
-    def is_python_code(self,content):
+    async def is_python_code(self,content):
         try:
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append("Verifying if the code is a python based code")
+                await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
             tokens = tokenize.generate_tokens(StringIO(content).readline)
             for _ in tokens:
                 pass  # Simply iterate through the tokens
@@ -98,26 +106,31 @@ class CoderAgent:
         except tokenize.TokenError:
             return False
     
-    def ensure_code_block_format(self, code_content: str) -> str:
+    async def ensure_code_block_format(self, code_content: str) -> str:
         """Ensure code is properly wrapped in markdown code block markers"""
         # Remove existing markers if present
         if("```python" in code_content):
             return code_content
 
         # Check if it's a proper Python code (has imports or typical Python syntax)
-        if self.is_python_code(code_content):
+        if await self.is_python_code(code_content):
             return f"```python\n{code_content}\n```"
         return code_content
 
     async def generate_reply(
-        self, user_message: str, deps: CoderDependencies
+        self, user_message: str, deps: CoderDependencies,websocket:WebSocket,
+                    stream_output:StreamResponse
     ) -> Tuple[bool, str, List[ModelMessage]]:
         """Generate reply from the coder agent"""
         try:
+            self.websocket = websocket
+            self.stream_output = stream_output
             print(f"\nInside generate reply message (Coder Agent)")
             print(f"User message: {user_message}")
             print(f"Dependencies: {deps}\n")
-
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append("Generating the code...")
+                await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
             result = await self._agent.run(user_message, deps=deps)
             if hasattr(result, "data"):
                 # Ensure code is properly formatted
@@ -126,7 +139,12 @@ class CoderAgent:
                     if hasattr(result.data, "content")
                     else str(result.data)
                 )
-                formatted_content = self.ensure_code_block_format(content)
+                time.sleep(2)
+                if self.stream_output and self.websocket:
+                    self.stream_output.steps.append("Ensuring code is properly formatted")
+                    await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
+                
+                formatted_content = await self.ensure_code_block_format(content)
 
                 # Build properly formatted response
                 response = f"terminated={getattr(result.data, 'terminated', True)} "
@@ -151,6 +169,8 @@ class Executor:
             self._system_prompt = system_prompt
             self.name = "Executor Agent"
             self.description = "A computer terminal that performs no other action than running Python scripts or sh shell scripts"
+            self.websocket:Optional[WebSocket]=None
+            self.stream_output: Optional[StreamResponse] = None
             self.add_system_message()
             self.register_tool()
         except Exception as e:
@@ -196,7 +216,7 @@ class Executor:
                         or await ctx.deps.confirm_execution(execution_requests[0])
                     ):
                         result = await ctx.deps.executor.execute_code_blocks(
-                            execution_requests, cancellation_token=CancellationToken()
+                            execution_requests,self.websocket,self.stream_output, cancellation_token=CancellationToken()
                         )
 
                         if result.output.strip() == "":
@@ -233,9 +253,10 @@ class Executor:
         return None
 
     async def generate_reply(
-        self, user_message: str, deps: ExecutorDependencies
-    ) -> Tuple[bool, str, List[ModelMessage]]:
+        self, user_message: str, deps: ExecutorDependencies,websocket: WebSocket, stream_output: StreamResponse) -> Tuple[bool, str, List[ModelMessage]]:
         try:
+            self.websocket = websocket
+            self.stream_output = stream_output
             result = await self._agent.run(user_message, deps=deps)
             print(
                 f"Executor result (Inside executor agent generate reply): {result.data}"

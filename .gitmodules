@@ -1,0 +1,3 @@
+[submodule "TheAgenticBrowser"]
+	path = TheAgenticBrowser
+	url = https://github.com/TheAgenticAI/TheAgenticBrowser.git
