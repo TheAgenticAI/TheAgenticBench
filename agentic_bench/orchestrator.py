@@ -426,7 +426,8 @@ class SystemOrchestrator:
                     self.executor_deps.content = self.context.last_code_block
                 success, response, messages = await agent.generate_reply(
                     user_message="Execute the code",
-                    deps=self.executor_deps
+                    deps=self.executor_deps,websocket=self.websocket,
+                    stream_output=self.stream_output
                 )
             elif isinstance(agent, FileSurfer):
                 success, response, messages = await agent.generate_reply(

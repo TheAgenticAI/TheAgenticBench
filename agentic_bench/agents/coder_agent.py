@@ -94,8 +94,11 @@ class CoderAgent:
             # Use raw string to prevent escape character issues
             return self._system_prompt
 
-    def is_python_code(self,content):
+    async def is_python_code(self,content):
         try:
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append("Verifying if the code is a python based code")
+                await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
             tokens = tokenize.generate_tokens(StringIO(content).readline)
             for _ in tokens:
                 pass  # Simply iterate through the tokens
@@ -103,14 +106,14 @@ class CoderAgent:
         except tokenize.TokenError:
             return False
     
-    def ensure_code_block_format(self, code_content: str) -> str:
+    async def ensure_code_block_format(self, code_content: str) -> str:
         """Ensure code is properly wrapped in markdown code block markers"""
         # Remove existing markers if present
         if("```python" in code_content):
             return code_content
 
         # Check if it's a proper Python code (has imports or typical Python syntax)
-        if self.is_python_code(code_content):
+        if await self.is_python_code(code_content):
             return f"```python\n{code_content}\n```"
         return code_content
 
@@ -141,7 +144,7 @@ class CoderAgent:
                     self.stream_output.steps.append("Ensuring code is properly formatted")
                     await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
                 
-                formatted_content = self.ensure_code_block_format(content)
+                formatted_content = await self.ensure_code_block_format(content)
 
                 # Build properly formatted response
                 response = f"terminated={getattr(result.data, 'terminated', True)} "

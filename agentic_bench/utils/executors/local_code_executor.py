@@ -285,12 +285,12 @@ $functions"""
         # exec_result = await self._execute_code_dont_check_setup(
         #     [CodeBlock(code=func_file_content, language="python")], cancellation_token
         # )
-        exec_result = await self._execute_code_dont_check_setup(
-            code_blocks, cancellation_token
-        )
+        # exec_result = await self._execute_code_dont_check_setup(
+        #     code_blocks, cancellation_token
+        # )
 
-        if exec_result.exit_code != 0:
-            raise ValueError(f"Functions failed to load: {exec_result.output}")
+        # if exec_result.exit_code != 0:
+        #     raise ValueError(f"Functions failed to load: {exec_result.output}")
 
         self._setup_functions_complete = True
 
