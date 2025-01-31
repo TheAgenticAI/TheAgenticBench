@@ -24,7 +24,7 @@ from agentic_bench.agents.coder_agent import (
 )
 from agentic_bench.agents.rag_agent import RAGAgent, RAGDependencies, RAGResult
 from agentic_bench.utils.initializers.graph_initializer import GraphInitializer
-from agentic_bench.utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, rag_description, rag_system_prompt
+from agentic_bench.utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, rag_system_prompt
 from agentic_bench.utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
 
 load_dotenv()
@@ -215,7 +215,7 @@ class SystemOrchestrator:
                 # Initialize RAG Agent dynamically
                 rag_deps = RAGDependencies(
                     graph_rag=graph_initializer,
-                    description=rag_description,
+                    description=AGENT_DESCRIPTION_FINANCE,
                     system_message=rag_system_prompt,
                 )
 
@@ -229,7 +229,12 @@ class SystemOrchestrator:
                     system_prompt=rag_system_prompt,
                 )
 
-                rag_agent_instance = RAGAgent(agent=rag_agent, system_prompt=rag_system_prompt, description = AGENT_DESCRIPTION_FINANCE)
+                # Initialize RAG agent instance without description parameter
+                rag_agent_instance = RAGAgent(
+                    agent=rag_agent,
+                    system_prompt=rag_system_prompt
+                )
+
                 self.agents.append(rag_agent_instance)
                 logfire.info("RAG Agent successfully initialized.")
 
@@ -438,12 +443,10 @@ class SystemOrchestrator:
             elif isinstance(agent, RAGAgent): # RAG Agent
                 success, response, messages = await agent.generate_reply(
                     instruction,
-                    deps=self.rag_deps
+                    deps=self.rag_deps,
+                    websocket=self.websocket,
+                    stream_output=self.stream_output
                 )
-                # self.chat_history = [*self.chat_history, *messages]
-                # logfire.info("RAG response received and messages stored")
-                # print(f"RAG response: {response}")
-                # logfire.info(f"RAG messages: {messages}")
 
             else:  # FileSurfer
                 success, response, messages = await agent.generate_reply(

@@ -53,7 +53,8 @@ class GraphInitializer:
          Returns:
              str: Status message indicating the ingestion process result.
          """
-
+        if not os.path.exists(pdf_dir):
+            os.makedirs(pdf_dir)
         # Check if the working directory (memory) is empty
         is_memory_empty = not os.listdir(self.graph.working_dir)
         extracted_texts = await extract_text_from_directory_async(pdf_dir)

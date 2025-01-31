@@ -9,6 +9,8 @@
 #### Indexing and Querying
 The RAG Agent uses **Fast-graph-RAG** for efficient indexing and querying.
 
+The `graph_data_folder` and `Pdf_data_folder` will be created on the first time initialization of the framework on your device.
+
 #### Optional Agent Activation
 The RAG Agent is optional and activates only when:
 1. The user has uploaded data to the `PDF_Data_Folder` folder, or
