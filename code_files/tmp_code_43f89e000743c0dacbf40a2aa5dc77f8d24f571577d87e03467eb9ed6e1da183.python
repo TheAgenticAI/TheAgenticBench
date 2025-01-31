@@ -1,0 +1,8 @@
+# Here is the Python code for the function. Note that Python treats 0 as False, and any other number as True.
+
+def check_odd_even(n):
+    return 'Even' if n % 2 == 0 else 'Odd'
+
+# Test the function
+print(check_odd_even(7))  # should print 'Odd'
+print(check_odd_even(10))  # should print 'Even'

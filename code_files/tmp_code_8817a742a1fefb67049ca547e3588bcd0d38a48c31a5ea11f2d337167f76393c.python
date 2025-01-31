@@ -1,0 +1,24 @@
+Sure, here's a simple Python function that calculates the Fibonacci sequence up to n terms using recursion:
+
+
+def fibonacci(n):
+    if n <= 0:
+        print("Input should be positive integer")
+    elif n == 1:
+        return 0
+    elif n == 2:
+        return 1
+    else:
+        return fibonacci(n-1) + fibonacci(n-2)
+
+
+You may want to note that this function can be slow for large inputs because it does not store intermediate results, so it ends up recalculating the same values many times. If you're interested in a more efficient implementation, you might want to use a technique known as memoization. Here is an example of how you could implement the Fibonacci sequence using such a technique:
+
+
+def fibonacci(n, computed = {0: 0, 1: 1}):
+    if n not in computed:
+        computed[n] = fibonacci(n-1, computed) + fibonacci(n-2, computed)
+    return computed[n]
+
+
+This version of the function stores previously computed values in a dictionary and reuses them as needed, which can greatly increase its efficiency.

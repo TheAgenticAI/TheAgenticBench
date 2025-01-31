@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  agentic_bench:
+    build:
+      context: ./agentic_bench
+      dockerfile: Dockerfile
+    volumes:
+      - ./agentic_bench:/app
+    env_file:
+      - .env
+    restart: always
+    network_mode: host
+
+  autoscrapper:
+    build:
+      context: ./autoscrapper
+      dockerfile: Dockerfile
+    volumes:
+      - ./autoscrapper:/app
+    env_file:
+      - .env
+    restart: always
+    network_mode: host
+  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - .env
+    depends_on:
+      - agentic_bench
+      - autoscrapper
+    restart: always
+    network_mode: host
