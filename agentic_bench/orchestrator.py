@@ -422,6 +422,12 @@ class SystemOrchestrator:
                     user_message="Execute the code",
                     deps=self.executor_deps
                 )
+            elif isinstance(agent, FileSurfer):
+                success, response, messages = await agent.generate_reply(
+                    user_message=instruction,
+                    websocket=self.websocket,
+                    stream_output=self.stream_output
+                )
             elif isinstance(agent, WebSurfer):
                 success, response, messages = await agent.generate_reply(
                     instruction=instruction,

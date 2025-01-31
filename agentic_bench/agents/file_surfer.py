@@ -17,6 +17,10 @@ from pydantic_ai.messages import (
     ModelMessage,
 )
 from pydantic_ai.models.openai import OpenAIModel
+from fastapi import WebSocket
+from dataclasses import asdict
+from agentic_bench.utils.stream_response_format import StreamResponse
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -67,6 +71,8 @@ def error_handler(func):
 @dataclass
 class FileToolDependencies:
     browser: RequestsMarkdownBrowser
+    websocket: Optional[WebSocket]
+    stream_output: Optional[StreamResponse]
 
 class FileSurfer:
     """An agent that uses tools to read and navigate local files with robust error handling."""
@@ -104,6 +110,8 @@ class FileSurfer:
             self._system_prompt = system_prompt
             self._viewport_size = viewport_size
             self._downloads_folder = downloads_folder
+            self.websocket: Optional[WebSocket] = None
+            self.stream_output: Optional[StreamResponse] = None
             self._register_tools()
             logger.info("FileSurfer initialized successfully")
         except Exception as e:
@@ -142,6 +150,19 @@ class FileSurfer:
             try:
                 ctx.deps.browser.open_local_file(path)
                 header, content = self._get_browser_state()
+                if ctx.deps.stream_output and ctx.deps.websocket:
+                    ctx.deps.stream_output.steps.append(
+                        f"Opening local file: {path} ..."
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
+                    ctx.deps.stream_output.steps.append(
+                        f"{header.strip()}"
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
                 return f"{header.strip()}\n=======================\n{content}"
             except Exception as e:
                 logger.error(f"Failed to open file {path}: {str(e)}", exc_info=True)
@@ -156,6 +177,19 @@ class FileSurfer:
             try:
                 ctx.deps.browser.page_up()
                 header, content = self._get_browser_state()
+                if ctx.deps.stream_output and ctx.deps.websocket:
+                    ctx.deps.stream_output.steps.append(
+                        f"Scrolling up..."
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
+                    ctx.deps.stream_output.steps.append(
+                        f"{header.strip()}"
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
                 return f"{header.strip()}\n=======================\n{content}"
             except Exception as e:
                 logger.error(
@@ -170,6 +204,19 @@ class FileSurfer:
             try:
                 ctx.deps.browser.page_down()
                 header, content = self._get_browser_state()
+                if ctx.deps.stream_output and ctx.deps.websocket:
+                    ctx.deps.stream_output.steps.append(
+                        f"Scrolling down..."
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
+                    ctx.deps.stream_output.steps.append(
+                        f"{header.strip()}"
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
                 return f"{header.strip()}\n=======================\n{content}"
             except Exception as e:
                 logger.error(
@@ -188,6 +235,19 @@ class FileSurfer:
             try:
                 ctx.deps.browser.find_on_page(search_string)
                 header, content = self._get_browser_state()
+                if ctx.deps.stream_output and ctx.deps.websocket:
+                    ctx.deps.stream_output.steps.append(
+                        f"Searching for '{search_string}'..."
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
+                    ctx.deps.stream_output.steps.append(
+                        f"{header.strip()}"
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
                 return f"{header.strip()}\n=======================\n{content}"
             except Exception as e:
                 logger.error(
@@ -205,6 +265,19 @@ class FileSurfer:
             try:
                 ctx.deps.browser.find_next()
                 header, content = self._get_browser_state()
+                if ctx.deps.stream_output and ctx.deps.websocket:
+                    ctx.deps.stream_output.steps.append(
+                        f"Finding next occurence..."
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
+                    ctx.deps.stream_output.steps.append(
+                        f"{header.strip()}"
+                    )
+                    await ctx.deps.websocket.send_text(
+                        json.dumps(asdict(self.stream_output))
+                    )
                 return f"{header.strip()}\n=======================\n{content}"
             except Exception as e:
                 logger.error(f"Error finding next occurrence: {str(e)}", exc_info=True)
@@ -263,7 +336,7 @@ class FileSurfer:
 
     @error_handler
     async def generate_reply(
-        self, user_message: str
+        self, user_message: str, websocket: WebSocket, stream_output: StreamResponse
     ) -> Tuple[bool, str, List[ModelMessage]]:
         """
         Generate reply to user message with error handling
@@ -278,6 +351,9 @@ class FileSurfer:
             FileSurferError: If reply generation fails
         """
         try:
+            self.websocket = websocket
+            self.stream_output = stream_output
+        
             if self._browser is None:
                 self._browser = RequestsMarkdownBrowser(
                     viewport_size=self._viewport_size,
@@ -289,7 +365,7 @@ class FileSurfer:
             )
 
             message_history = self._build_message_history(context_message)
-            deps = FileToolDependencies(browser=self._browser)
+            deps = FileToolDependencies(browser=self._browser, websocket=self.websocket, stream_output=self.stream_output)
 
             response = await self._agent.run(
                 user_prompt=user_message, message_history=message_history, deps=deps
