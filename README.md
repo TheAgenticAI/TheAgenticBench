@@ -4,12 +4,13 @@
 
 # agentic-bench
 
-An extendable multi-agent framework for web scraping, code generation, file access, RAG and much more!
+An extendable multi-agent framework for web scraping, code generation, code execution, file access, RAG and much more!
 List of existing agents:
 - Web Surfer
 - File Access
 - RAG Agent
 - Code Generator
+- Code Executor
 - Web Scraper (TheAgenticBrowser)
 
 ## Quick Start
