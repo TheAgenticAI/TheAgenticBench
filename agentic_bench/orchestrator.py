@@ -11,21 +11,21 @@ from dotenv import load_dotenv
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai import Agent
-from agentic_bench.utils.stream_response_format import StreamResponse
-from agentic_bench.utils.prompts import (
+from utils.stream_response_format import StreamResponse
+from utils.prompts import (
     ORCHESTRATOR_PLAN_PROMPT,
     ORCHESTRATOR_GET_FINAL_ANSWER,
 )
-from agentic_bench.agents.file_surfer import FileSurfer, FileToolDependencies, RequestsMarkdownBrowser
-from agentic_bench.agents.web_surfer import WebSurfer
-from agentic_bench.agents.coder_agent import (
+from agents.file_surfer import FileSurfer, FileToolDependencies, RequestsMarkdownBrowser
+from agents.web_surfer import WebSurfer
+from agents.coder_agent import (
     CoderAgent, CoderDependencies, Executor, ExecutorDependencies,
     DockerCodeExecutor, LocalCodeExecutor, CoderResult, coder_system_message
 )
-from agentic_bench.agents.rag_agent import RAGAgent, RAGDependencies, RAGResult
-from agentic_bench.utils.initializers.graph_initializer import GraphInitializer
-from agentic_bench.utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, rag_system_prompt
-from agentic_bench.utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
+from agents.rag_agent import RAGAgent, RAGDependencies, RAGResult
+from utils.initializers.graph_initializer import GraphInitializer
+from utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, rag_system_prompt
+from utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
 
 load_dotenv()
 

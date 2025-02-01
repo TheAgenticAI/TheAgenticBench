@@ -10,9 +10,11 @@ services:
     env_file:
       - .env
     restart: always
+    # ports:
+    #   - "8081:8081"
     network_mode: host
 
-  autoscrapper:
+  agentic_browser:
     build:
       context: ./TheAgenticBrowser
       dockerfile: Dockerfile
@@ -21,6 +23,8 @@ services:
     env_file:
       - .env
     restart: always
+    # ports:
+    #   - "8000:8000"
     network_mode: host
   
   frontend:
@@ -34,6 +38,8 @@ services:
       - .env
     depends_on:
       - agentic_bench
-      - autoscrapper
+      - agentic_browser
     restart: always
+    # ports:
+    #   - "3000:3000"
     network_mode: host

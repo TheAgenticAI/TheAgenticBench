@@ -15,13 +15,13 @@ from pydantic_ai.tools import AgentDeps
 from typing import List, Type, Union, Callable, Awaitable, Literal, Tuple, Any, Optional
 import tokenize
 from io import StringIO
-from agentic_bench.utils.stream_response_format import StreamResponse
-from agentic_bench.utils import CancellationToken
-from agentic_bench.utils.executors.executor_utils import CodeBlock
-from agentic_bench.utils.executors import LocalCommandLineCodeExecutor as LocalCodeExecutor
-from agentic_bench.utils.executors import DockerCommandLineCodeExecutor as DockerCodeExecutor
-from agentic_bench.utils.executors.executor_utils._base import CodeExecutor
-from agentic_bench.utils.oai_client import get_client
+from utils.stream_response_format import StreamResponse
+from utils import CancellationToken
+from utils.executors.executor_utils import CodeBlock
+from utils.executors import LocalCommandLineCodeExecutor as LocalCodeExecutor
+from utils.executors import DockerCommandLineCodeExecutor as DockerCodeExecutor
+from utils.executors.executor_utils._base import CodeExecutor
+from utils.oai_client import get_client
 
 load_dotenv()
 coder_system_message = """You are a helpful AI assistant. Solve tasks using your coding and language skills.

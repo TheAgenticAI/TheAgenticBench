@@ -2,10 +2,10 @@ from pydantic_ai import Agent, RunContext
 from dataclasses import dataclass
 from typing import List, Tuple, Any,  Optional
 from pydantic import Field, BaseModel
-from agentic_bench.utils.initializers.graph_initializer import GraphInitializer
+from utils.initializers.graph_initializer import GraphInitializer
 from fastapi import WebSocket
-from agentic_bench.utils.stream_response_format import StreamResponse
-from agentic_bench.utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
+from utils.stream_response_format import StreamResponse
+from utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
 from dataclasses import asdict
 import json
 import asyncio
