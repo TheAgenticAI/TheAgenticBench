@@ -14,7 +14,7 @@ List of existing agents:
 
 ## Quick Start
 
-### To use host networking in docker compose, follow these steps if using Docker Desktop:
+### To use host networking in docker compose, follow these steps if using Docker Desktop as per docker website (https://docs.docker.com/engine/network/drivers/host/):
 
 - Sign in to your Docker account in Docker Desktop.
 - Navigate to Settings.
