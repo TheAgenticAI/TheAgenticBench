@@ -1,7 +1,7 @@
 export const DUMMY_AGENTS = [
   {
     title: "Orchestrator",
-    content: "Manages task assignment to agents and control flow.",
+    content: "Manages task assignment to agents and controls flow.",
   },
   {
     title: "WebAgent",
@@ -10,12 +10,16 @@ export const DUMMY_AGENTS = [
   },
   {
     title: "FileSurferAgent",
-    content: "Can download files from browser, perform actions on file-system.",
+    content: "Can access files in file-system and perform actions.",
+  },
+  {
+    title: "RAGAgent",
+    content: "Agent specialized in using RAG to answer questions. Utilizes the existing data uploaded by user",
   },
   {
     title: "CoderAgent",
     content:
-      "Writes code that's needed to transform data from other agents to complete user's query.",
+      "Writes code that is needed to transform data from other agents to complete user's query.",
   },
   {
     title: "CodeExecutorAgent",

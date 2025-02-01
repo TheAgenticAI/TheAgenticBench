@@ -6,6 +6,8 @@ import {AccordionGroup} from "../customUI/Accordion";
 // for future versions
 // import {ModelSelect} from "../customUI/ModelSelect";
 
+const { VITE_MODEL_NAME } = import.meta.env;
+
 export const AgentInfo = () => {
   return (
     <div className="w-1/5 flex flex-col border-l-2 p-6 space-y-6">
@@ -19,7 +21,7 @@ export const AgentInfo = () => {
         <div className="relative flex flex-row items-center justify-between py-2 px-4 border-2 border-border rounded-md bg-input">
           <div className="flex flex-row items-center gap-2">
             <Box3dCenter />
-            {process.env.MODEL_NAME}
+            {VITE_MODEL_NAME}
           </div>
           <span className="absolute right-0 flex h-12 w-12 items-center justify-center">
             <Dot className="h-12 w-12 text-primary-success" />
