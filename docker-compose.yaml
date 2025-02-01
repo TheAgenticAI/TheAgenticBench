@@ -10,8 +10,6 @@ services:
     env_file:
       - .env
     restart: always
-    # ports:
-    #   - "8081:8081"
     network_mode: host
 
   agentic_browser:
@@ -23,8 +21,6 @@ services:
     env_file:
       - .env
     restart: always
-    # ports:
-    #   - "8000:8000"
     network_mode: host
   
   frontend:
@@ -40,6 +36,4 @@ services:
       - agentic_bench
       - agentic_browser
     restart: always
-    # ports:
-    #   - "3000:3000"
     network_mode: host

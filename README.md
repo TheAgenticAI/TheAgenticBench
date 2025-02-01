@@ -14,6 +14,14 @@ List of existing agents:
 
 ## Quick Start
 
+### To use host networking in docker compose, follow these steps if using Docker Desktop:
+
+- Sign in to your Docker account in Docker Desktop.
+- Navigate to Settings.
+- Under the Resources tab, select Network.
+- Check the Enable host networking option.
+- Select Apply and restart.
+
 ```bash
 git clone --recurse-submodules https://github.com/TheAgenticAI/agentic-bench.git
 docker compose up
