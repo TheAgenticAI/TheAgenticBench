@@ -14,7 +14,7 @@ from pydantic_ai.messages import (
 from fastapi import WebSocket
 from dataclasses import asdict
 
-from agentic_bench.utils.stream_response_format import StreamResponse
+from utils.stream_response_format import StreamResponse
 
 TIMEOUT = 9999999999999999999999999999999999999999999
 

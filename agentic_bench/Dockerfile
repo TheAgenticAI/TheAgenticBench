@@ -4,6 +4,9 @@ WORKDIR /app
 
 COPY requirements.txt .
 
+RUN export PYTHONPATH=/app
+RUN apt-get update -y && apt-get install build-essential -y
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .

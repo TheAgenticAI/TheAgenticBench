@@ -7,7 +7,7 @@ import logging
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass
 from functools import wraps
-from agentic_bench.utils.markdown_browser import RequestsMarkdownBrowser
+from utils.markdown_browser import RequestsMarkdownBrowser
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import (
     SystemPromptPart,
@@ -19,7 +19,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.models.openai import OpenAIModel
 from fastapi import WebSocket
 from dataclasses import asdict
-from agentic_bench.utils.stream_response_format import StreamResponse
+from utils.stream_response_format import StreamResponse
 
 from dotenv import load_dotenv
 

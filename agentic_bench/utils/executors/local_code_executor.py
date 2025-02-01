@@ -9,7 +9,7 @@ from string import Template
 from types import SimpleNamespace
 from typing import Any, Callable, ClassVar, List, Optional, Sequence, Union
 import venv
-from agentic_bench.utils import CancellationToken
+from utils import CancellationToken
 from .executor_utils import (
     CodeBlock,
     CodeExecutor,
@@ -19,7 +19,7 @@ from .executor_utils import (
 from typing_extensions import ParamSpec
 from dataclasses import asdict
 import json
-from agentic_bench.utils.stream_response_format import StreamResponse
+from utils.stream_response_format import StreamResponse
 from fastapi import WebSocket
 from .executor_utils._common import (
     PYTHON_VARIANTS,
