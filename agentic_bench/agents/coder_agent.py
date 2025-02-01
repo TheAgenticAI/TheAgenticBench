@@ -139,7 +139,6 @@ class CoderAgent:
                     if hasattr(result.data, "content")
                     else str(result.data)
                 )
-                time.sleep(2)
                 if self.stream_output and self.websocket:
                     self.stream_output.steps.append("Ensuring code is properly formatted")
                     await self.websocket.send_text(json.dumps(asdict(self.stream_output)))

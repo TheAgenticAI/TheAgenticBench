@@ -22,7 +22,10 @@ from agents.coder_agent import (
     CoderAgent, CoderDependencies, Executor, ExecutorDependencies,
     DockerCodeExecutor, LocalCodeExecutor, CoderResult, coder_system_message
 )
-from agents.rag_agent import RAGAgent, RAGDependencies, RAGResult
+from agents.rag_agent import RAGAgent, RAGDependencies
+from utils.initializers.rag_constants import rag_system_prompt
+
+from utils.initializers.rag_constants import PDF_DIRECTORY
 from utils.initializers.graph_initializer import GraphInitializer
 from utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, rag_system_prompt
 from utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
@@ -88,7 +91,7 @@ class OrchestrationContext:
 # Main Orchestrator Class
 class SystemOrchestrator:
     def __init__(self):
-        self.agents: List[Union[FileSurfer, CoderAgent, Executor, WebSurfer]] = []
+        self.agents: List[Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent]] = []
         self.model: Optional[OpenAIModel] = None
         self.websocket: Optional[WebSocket] = None
         self.stream_output: Optional[StreamResponse] = None
@@ -117,7 +120,7 @@ class SystemOrchestrator:
             logfire.error(f"WebSocket send failed: {str(e)}")
             return False
 
-    async def initialize_agents(self) -> List[Union[FileSurfer, CoderAgent, Executor, WebSurfer]]:
+    async def initialize_agents(self) -> List[Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent]]:
         """Initialize all required agents with error handling"""
         try:
             logfire.info("Initializing agents")
@@ -195,48 +198,21 @@ class SystemOrchestrator:
             # Initialize Web Surfer
             web_surfer_agent = WebSurfer(api_url="http://localhost:8000/execute_task")
 
-            # Combine all agents
-            self.agents = [file_surfer_agent, coder_agent, executor_agent, web_surfer_agent]
-
-
-            graph_initializer = GraphInitializer(
-                working_dir=WORKING_DIR,
-                domain=DOMAIN,
-                example_queries=EXAMPLE_QUERIES,
-                entity_types=ENTITY_TYPES,
+            rag_agent = Agent(
+                model=self.model,
+                name="RAG Agent",
+                system_prompt=rag_system_prompt,
+                deps_type=RAGDependencies
             )
 
-            ingestion_status = await graph_initializer.ingest_data(pdf_dir=PDF_DIRECTORY)
-            logfire.info(f"Graph memory initialization status: {ingestion_status}")
+            # Initialize RAG agent instance without description parameter
+            rag_agent_instance = RAGAgent(
+                agent=rag_agent,
+                system_prompt=rag_system_prompt
+            )
 
-            if "Graph memory is empty" in ingestion_status:
-                logfire.warn("Skipping RAG Agent initialization: No files or memory.")
-            else:
-                # Initialize RAG Agent dynamically
-                rag_deps = RAGDependencies(
-                    graph_rag=graph_initializer,
-                    description=AGENT_DESCRIPTION_FINANCE,
-                    system_message=rag_system_prompt,
-                )
-
-                self.rag_deps = rag_deps
-
-                rag_agent = Agent(
-                    model=self.model,
-                    name="RAG Agent",
-                    deps_type=RAGDependencies,
-                    result_type=RAGResult,
-                    system_prompt=rag_system_prompt,
-                )
-
-                # Initialize RAG agent instance without description parameter
-                rag_agent_instance = RAGAgent(
-                    agent=rag_agent,
-                    system_prompt=rag_system_prompt
-                )
-
-                self.agents.append(rag_agent_instance)
-                logfire.info("RAG Agent successfully initialized.")
+            # Combine all agents
+            self.agents = [file_surfer_agent, coder_agent, executor_agent, web_surfer_agent, rag_agent_instance]
 
             logfire.info(f"Successfully initialized {len(self.agents)} agents")
             logfire.info(f"Agents: {[agent.name for agent in self.agents]}")
@@ -356,7 +332,7 @@ class SystemOrchestrator:
             logfire.error(error_msg)
             return False, None, error_msg
 
-    async def execute_agent_instruction(self, agent: Union[FileSurfer, CoderAgent, Executor, WebSurfer], instruction: str) -> AgentExecutionResult:
+    async def execute_agent_instruction(self, agent: Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent], instruction: str) -> AgentExecutionResult:
         """Execute agent instruction with robust error handling using generate_reply"""
         start_time = datetime.now()
         result = AgentExecutionResult(
@@ -443,8 +419,7 @@ class SystemOrchestrator:
                 )
             elif isinstance(agent, RAGAgent): # RAG Agent
                 success, response, messages = await agent.generate_reply(
-                    instruction,
-                    deps=self.rag_deps,
+                    user_message=instruction,
                     websocket=self.websocket,
                     stream_output=self.stream_output
                 )
@@ -677,7 +652,7 @@ class SystemOrchestrator:
             # Clear any sensitive data
             self.context = OrchestrationContext()  
             
-    def _get_agent_by_name(self, name: str) -> Optional[Union[FileSurfer, CoderAgent, Executor, WebSurfer]]:
+    def _get_agent_by_name(self, name: str) -> Optional[Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent]]:
         """Helper method to find agent by name"""
         return next((agent for agent in self.agents if agent.name == name), None)
 

@@ -2,15 +2,21 @@ from pydantic_ai import Agent, RunContext
 from dataclasses import dataclass
 from typing import List, Tuple, Any,  Optional
 from pydantic import Field, BaseModel
-from utils.initializers.graph_initializer import GraphInitializer
 from fastapi import WebSocket
 from utils.stream_response_format import StreamResponse
-from utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
 from dataclasses import asdict
 import json
 import asyncio
 import logfire
 import tracemalloc
+import os
+from fastapi import WebSocket
+from dataclasses import asdict
+from utils.stream_response_format import StreamResponse
+from utils.initializers.rag_constants import PDF_DIRECTORY
+from utils.initializers.graph_initializer import GraphInitializer
+from utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, rag_system_prompt
+from utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
 
 tracemalloc.start()
 
@@ -20,6 +26,8 @@ class RAGDependencies:
     graph_rag: GraphInitializer
     description: str
     system_message: str
+    websocket: Optional[WebSocket]
+    stream_output: Optional[StreamResponse]
 
 
 
@@ -33,58 +41,36 @@ class RAGResult(BaseModel):
 class RAGAgent:
     def __init__(self, agent: Agent, system_prompt: str):
         try:
-            self._agent = agent
+            self._agent: Agent = agent
             self.name = "RAG Agent"
             self._system_prompt = system_prompt
             self.websocket: Optional[WebSocket] = None
             self.stream_output: Optional[StreamResponse] = None
-            self.description = AGENT_DESCRIPTION_FINANCE
+
+            all_file_names_list = [f for f in os.listdir(PDF_DIRECTORY) if os.path.isfile(os.path.join(PDF_DIRECTORY, f))]
+            file_names_string = ", ".join(all_file_names_list)
+
+            self.description = f"RAG agent which utilizes the existing data uploaded by user and can answer questions based on the provided data. The available files are: {file_names_string}"
             self.register_tool()
         except Exception as e:
             logfire.error(f"Failed to initialize RAGAgent: {e}")
             raise
 
-    def add_system_message(self):
-        @self._agent.system_prompt
-        def add_system_messages(ctx: RunContext[RAGDependencies]) -> str:
-            return self._system_prompt
+    # def add_system_message(self):
+    #     @self._agent.system_prompt
+    #     def add_system_messages(ctx: RunContext[RAGDependencies]) -> str:
+    #         return self._system_prompt
 
     def register_tool(self):
         @self._agent.tool
-        def query_rag(ctx: RunContext[RAGDependencies], query: str) -> dict:
+        async def query_rag(ctx: RunContext[RAGDependencies], query: str) -> dict:
             """Query the GraphRAG instance and return the parsed response."""
-            if self.stream_output and self.websocket:
-                self.stream_output.steps.append(f"Querying RAG system with: {query}")
-                asyncio.run(self.websocket.send_text(json.dumps(asdict(self.stream_output))))
 
-            response = ctx.deps.graph_rag.query(query)
-            self.references = response.context
+            if ctx.deps.stream_output and ctx.deps.websocket:
+                ctx.deps.stream_output.steps.append(f"Querying RAG system with: {query}")
+                await ctx.deps.websocket.send_text(json.dumps(asdict(ctx.deps.stream_output)))
 
-            if self.stream_output and self.websocket:
-                asyncio.run(self.websocket.send_text(json.dumps(asdict(self.stream_output))))
-
-            return response.response
-
-    async def generate_reply(
-            self, user_message: str, deps: RAGDependencies, websocket: WebSocket = None,
-            stream_output: StreamResponse = None
-    ) -> Tuple[bool, str, List]:
-        """Generate reply from the RAG agent"""
-        try:
-            self.websocket = websocket
-            self.stream_output = stream_output
-
-            if self.stream_output and self.websocket:
-                self.stream_output.steps.append("Data Ingestion in Progress")
-                await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
-
-                # Add sleep after data ingestion step
-                await asyncio.sleep(5)  # 2 second delay, adjust as needed
-
-                self.stream_output.steps.append("Creating Knowledge Graph")
-                await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
-
-            response = await self._agent.run(user_message, deps=deps)
+            response = await ctx.deps.graph_rag.query(query)
 
             chunks = [
                 {
@@ -92,15 +78,15 @@ class RAGAgent:
                     "content": chunk[0].content,
                     "score": float(chunk[1]),
                 }
-                for chunk in self.references.chunks
+                for chunk in response.context.chunks
             ]
 
-            if self.stream_output and self.websocket:
-                self.stream_output.steps.append(f"Found {len(chunks)} relevant chunks")
-                await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
+            if ctx.deps.stream_output and ctx.deps.websocket:
+                ctx.deps.stream_output.steps.append(f"Found {len(chunks)} relevant chunks")
+                await ctx.deps.websocket.send_text(json.dumps(asdict(ctx.deps.stream_output)))
 
             relationships = []
-            for item in self.references.relationships:
+            for item in response.context.relationships:
                 for chunk_id in item[0].chunks:
                     if chunk_id in [chunk["id"] for chunk in chunks]:
                         rels = {
@@ -113,12 +99,44 @@ class RAGAgent:
                         if rels not in relationships:
                             relationships.append(rels)
 
+            return response.response
+
+    async def generate_reply(
+            self, user_message: str, websocket: WebSocket, stream_output: StreamResponse
+    ) -> Tuple[bool, str, List]:
+        """Generate reply from the RAG agent"""
+        try:
+            self.websocket = websocket
+            self.stream_output = stream_output
+
+            graph_initializer = GraphInitializer(
+                working_dir=WORKING_DIR,
+                domain=DOMAIN,
+                example_queries=EXAMPLE_QUERIES,
+                entity_types=ENTITY_TYPES,
+            )
+
+            ingestion_status = await graph_initializer.ingest_data(pdf_dir=PDF_DIRECTORY)
+            logfire.info(f"Graph memory initialization status: {ingestion_status}")
+
+            rag_deps = RAGDependencies(
+                graph_rag=graph_initializer,
+                description=AGENT_DESCRIPTION_FINANCE,
+                system_message=rag_system_prompt,
+                websocket=self.websocket,
+                stream_output=self.stream_output
+            )
+
             if self.stream_output and self.websocket:
-                self.stream_output.output = str(response.data.answer)
-                self.stream_output.status_code = 200
+                self.stream_output.steps.append("Data Ingestion in Progress")
                 await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
 
-            return True, str(response.data.answer), response.new_messages()
+                self.stream_output.steps.append("Creating Knowledge Graph")
+                await self.websocket.send_text(json.dumps(asdict(self.stream_output)))
+
+            response = await self._agent.run(user_message, deps=rag_deps)
+
+            return (True, str(response.data), response.all_messages())
 
         except Exception as e:
             logfire.error(f"Failed to generate RAG reply: {e}")

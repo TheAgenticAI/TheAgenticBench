@@ -2,6 +2,7 @@ from fast_graphrag import GraphRAG
 from typing import List
 import os
 import json
+import asyncio
 from .text_extractor import extract_text_from_directory_async
 from utils.calculate_md5_hash_of_file import calculate_md5
 
@@ -120,5 +121,9 @@ class GraphInitializer:
                 return f"Failed to ingest data into the graph: {e}"
 
 
-    def query(self, question:str):
-        return self.graph.query(question)
+
+    async def query(self, question: str):
+        """
+        Execute a query using a separate thread to avoid event loop conflicts.
+        """
+        return await asyncio.to_thread(self.graph.query, question)
