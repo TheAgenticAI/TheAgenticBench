@@ -14,6 +14,7 @@ List of existing agents:
 ## Quick Start
 
 ```bash
+git clone --recurse-submodules https://github.com/TheAgenticAI/agentic-bench.git
 docker compose up
 ```
 
