@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Agentic Bench Logo" width="200"/>
+  <img src="assets/ta_bench_logo.svg" alt="Agentic Bench Logo" width="200"/>
 </p>
 
 # agentic-bench
