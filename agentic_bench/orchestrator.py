@@ -124,7 +124,7 @@ class SystemOrchestrator:
 
             # Initialize OpenAI model
             self.model = OpenAIModel(
-                model_name=os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4"),
+                model_name=os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
                 api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
                 base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
             )
