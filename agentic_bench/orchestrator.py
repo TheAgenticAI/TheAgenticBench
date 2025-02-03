@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from pydantic_ai.messages import ModelMessage
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai import Agent
+from utils.oai_client import get_client
 from utils.stream_response_format import StreamResponse
 from utils.prompts import (
     ORCHESTRATOR_PLAN_PROMPT,
@@ -121,17 +122,10 @@ class SystemOrchestrator:
         try:
             logfire.info("Initializing agents")
 
-            self.openai_client = AsyncOpenAI(
-                api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
-                base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
-                timeout=9999999999999999999999999999999999999999999
-            )
-
             # Initialize OpenAI model
             self.model = OpenAIModel(
                 model_name=os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
-                openai_client=self.openai_client
-                
+                openai_client=get_client()
             )
 
             # Initialize File Surfer

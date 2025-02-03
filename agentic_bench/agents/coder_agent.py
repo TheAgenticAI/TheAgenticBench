@@ -270,8 +270,7 @@ if __name__ == "__main__":
     logfire.configure()
     model = OpenAIModel(
         model_name=os.getenv("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
-        api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
-        base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
+        openai_client=get_client()
 
     )
 

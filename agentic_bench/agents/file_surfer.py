@@ -7,6 +7,7 @@ import logging
 from typing import List, Optional, Tuple, Dict, Any
 from dataclasses import dataclass
 from functools import wraps
+from utils.oai_client import get_client
 from utils.markdown_browser import RequestsMarkdownBrowser
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.messages import (
@@ -429,8 +430,7 @@ if __name__ == "__main__":
         # Initialize OpenAI model
         model = OpenAIModel(
             model_name=os.getenv("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
-            api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
-            base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
+            openai_client=get_client()
         )
 
         # Initialize agent and file surfer
