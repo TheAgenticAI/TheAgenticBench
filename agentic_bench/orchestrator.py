@@ -25,11 +25,6 @@ from agents.coder_agent import (
 from agents.rag_agent import RAGAgent, RAGDependencies
 from utils.initializers.rag_constants import rag_system_prompt
 
-from utils.initializers.rag_constants import PDF_DIRECTORY
-from utils.initializers.graph_initializer import GraphInitializer
-from utils.initializers.rag_constants import DOMAIN, EXAMPLE_QUERIES, ENTITY_TYPES, WORKING_DIR, PDF_DIRECTORY, rag_system_prompt
-from utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
-
 load_dotenv()
 
 # Base Models
@@ -201,14 +196,12 @@ class SystemOrchestrator:
             rag_agent = Agent(
                 model=self.model,
                 name="RAG Agent",
-                system_prompt=rag_system_prompt,
                 deps_type=RAGDependencies
             )
 
             # Initialize RAG agent instance without description parameter
             rag_agent_instance = RAGAgent(
-                agent=rag_agent,
-                system_prompt=rag_system_prompt
+                agent=rag_agent
             )
 
             # Combine all agents

@@ -54,6 +54,11 @@ class GraphInitializer:
             example_queries (List[str]): Example queries for better understanding.
             entity_types (List[str]): Types of entities to index.
         """
+        self.working_dir = working_dir
+        self.domain = domain
+        self.example_queries = "\n".join(example_queries)
+        self.entity_types = entity_types
+
         self.graph = GraphRAG(
             working_dir=working_dir,
             domain=domain,
@@ -110,17 +115,21 @@ class GraphInitializer:
                     return "No files uploaded and no existing memory found. Graph memory is empty."
                 else:
                     return "No files uploaded, but existing graph memory is present."
+                
+            whole_text = "\n".join(extracted_texts)
 
-            # Combine all text and ingest into the graph
-            whole_text = "".join(extracted_texts)  # Ensure it's a flat list of strings
             try:
                 # Properly await the async_insert method
                 await self.graph.async_insert(whole_text)
+                self.graph = GraphRAG(
+                    working_dir=self.working_dir,
+                    domain=self.domain,
+                    example_queries=self.example_queries,
+                    entity_types=self.entity_types,
+                )
                 return "Data successfully ingested into the graph."
             except Exception as e:
-                return f"Failed to ingest data into the graph: {e}"
-
-
+                print(f"Failed to ingest data into the graph: {e}")
 
     async def query(self, question: str):
         """

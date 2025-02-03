@@ -37,20 +37,22 @@ class RAGResult(BaseModel):
     chunks: List[str]
     relationships: List[str]
 
+def get_rag_agent_dynamic_description():
+    all_file_names_list = [os.path.join(PDF_DIRECTORY, f) for f in os.listdir(PDF_DIRECTORY) if os.path.isfile(os.path.join(PDF_DIRECTORY, f)) and f.lower().endswith('.pdf')]
+    file_names_string = ", ".join(all_file_names_list)
+
+    return f"RAG agent which utilizes the existing data uploaded by user and can answer questions based on the provided data. The available files and their paths are: {file_names_string}"
 
 class RAGAgent:
-    def __init__(self, agent: Agent, system_prompt: str):
+    def __init__(self, agent: Agent):
         try:
             self._agent: Agent = agent
             self.name = "RAG Agent"
-            self._system_prompt = system_prompt
+            # self._system_prompt = system_prompt
             self.websocket: Optional[WebSocket] = None
             self.stream_output: Optional[StreamResponse] = None
+            self.description = get_rag_agent_dynamic_description()
 
-            all_file_names_list = [f for f in os.listdir(PDF_DIRECTORY) if os.path.isfile(os.path.join(PDF_DIRECTORY, f))]
-            file_names_string = ", ".join(all_file_names_list)
-
-            self.description = f"RAG agent which utilizes the existing data uploaded by user and can answer questions based on the provided data. The available files are: {file_names_string}"
             self.register_tool()
         except Exception as e:
             logfire.error(f"Failed to initialize RAGAgent: {e}")
