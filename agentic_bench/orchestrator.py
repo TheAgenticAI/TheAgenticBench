@@ -23,6 +23,7 @@ from agents.coder_agent import (
     DockerCodeExecutor, LocalCodeExecutor, CoderResult, coder_system_message
 )
 from agents.rag_agent import RAGAgent, RAGDependencies
+from openai import AsyncOpenAI
 from utils.initializers.rag_constants import rag_system_prompt
 
 load_dotenv()
@@ -120,11 +121,17 @@ class SystemOrchestrator:
         try:
             logfire.info("Initializing agents")
 
+            self.openai_client = AsyncOpenAI(
+                api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
+                base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
+                timeout=9999999999999999999999999999999999999999999
+            )
+
             # Initialize OpenAI model
             self.model = OpenAIModel(
                 model_name=os.environ.get("AGENTIC_BENCH_MODEL_NAME", "gpt-4o"),
-                api_key=os.getenv("AGENTIC_BENCH_MODEL_API_KEY"),
-                base_url=os.getenv("AGENTIC_BENCH_MODEL_BASE_URL"),
+                openai_client=self.openai_client
+                
             )
 
             # Initialize File Surfer
