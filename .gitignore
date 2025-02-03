@@ -172,7 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-
+.DS_store
 
 terminal_logs/*
 data/
