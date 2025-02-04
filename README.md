@@ -15,11 +15,13 @@ An extendable digital worker framework for web scraping, code generation, code e
 Build, customize, and deploy dynamic workflows—from research to business process automation with pre-built AI agents and custom options. All operated via a natural language interface.
 
 ## List of existing agents:
+- **Orchestrator Agent**: Takes the initial prompt, generates an action plan, and decides on the action control what agent performs what task, and in what order, to get to the final solution. This can be thought of as the parent agent.
 - **Web Agent** ([TheAgenticBrowser](https://github.com/TheAgenticAI/TheAgenticBrowser)): Can access any web-page to extract information or perform actions.
 - **Local File Agent**: Can download files from browser, perform actions on file-system.
-- **RAG Agent**: Utilizes the existing data uploaded by user to answer questions using its generative language
+- **RAG Agent**: An AI assistant specialized in using RAG to answer questions. Utilizes the existing data uploaded by user.
 - **Code Generator Agent**: Writes code to perform any action or algorithm or process other agent's response
 - **Code Executor Agent**: Executes code from coder agent with automated dependencies installation and runtime inputs.
+- **API Agent**: Agent for executing REST API calls.
 
 ## Quick Start
 ### Docker Setup
