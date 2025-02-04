@@ -1,4 +1,6 @@
-For Adding your own custom client follow the below steps:
+# Agentic Bench | Custom Agent
+
+## For Adding your own custom client follow the below steps:
 
 1. Refer to (https://ai.pydantic.dev/) for an overview of setting up agents and some predefined methods
 2. Create your custom_agent file inside `/agentic_bench/agents`
