@@ -7,6 +7,7 @@
 ## Table of Contents
 - [Overview](#Overview)
 - [List of existing agents](#List-of-existing-agents)
+- [Workflow](#Workflow)
 - [Quick Start](#Quick-Start)
 - [License](#License)
 
@@ -22,6 +23,13 @@ Build, customize, and deploy dynamic workflows—from research to business proce
 - **Code Generator Agent**: Writes code to perform any action or algorithm or process other agent's response
 - **Code Executor Agent**: Executes code from coder agent with automated dependencies installation and runtime inputs.
 - **API Agent**: Agent for executing REST API calls.
+
+## Workflow:
+1. **Agents Initialization**: All the existing agents are initialized based on their dependencies and parameters as a first step
+2. **Task Planning**: A planner agent(sub agent of the Orchestrator) generates a detailed plan based on user query and the agents available which shall be followed as a source of truth in the entire query execution.
+3. **Select Next Agent**: An iterative process begins where first step is the Selector Agent (sub-agent of the Orchestrator) which selects the next agent according to the plan. This Agent returns the next Agent to be called, generates an instruction for the next agent to follow, and gives an explaination justifying its decision.
+4. **Execute Agent Instruction**: The Agent selected in previous step is called with the generated instruction.
+5. **Critique**: The Critique Agent(sub-agent of the Orchestrator) takes in consideration output of all previous agents, looks through the plan and gives feedback whether the agent correctly executed the asked instruction. It returns a flag terminate(bool) which says if the current agent's task is completed or not. Based on this, next agent is selected.
 
 ## Quick Start
 ### Docker Setup
