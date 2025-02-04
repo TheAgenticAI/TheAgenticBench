@@ -1,4 +1,4 @@
-# agentic-one
+# TheAgenticBench
 - install dependencies using `pip install -r requirements.txt`
 - configure `.env` (using example `.env.copy`)
 - either run `python -m src.main` in root folder
