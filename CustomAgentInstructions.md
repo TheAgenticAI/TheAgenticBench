@@ -25,7 +25,7 @@
    # Configure your Agent Name, description and its system prompt
    ```
 5. [Optional] Refer to (https://ai.pydantic.dev/dependencies/) & (https://ai.pydantic.dev/results/) to understand about Agent dependencies and results and configure if required. 
-6. If the agent has to handle complex tasks which might include certain tool calls, uncomment the `self._register_tools()` statement and configure the method with all the tools as below:
+6. [Optional] If the agent has to handle complex tasks which might include certain tool calls, uncomment the `self._register_tools()` statement and configure the method with all the tools as below:
    ```
    def _register_tools(self):
         @self._agent.tool
