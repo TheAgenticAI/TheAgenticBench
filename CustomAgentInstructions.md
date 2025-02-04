@@ -64,3 +64,21 @@ For Adding your own custom client follow the below steps:
    ```
 8. Go to the `orchestrator.py` and include your agent in the below sections:
    
+   ![Orchestrator1](assets/orchestrator1.png)
+
+   ![Orchestrator2](assets/orchestrator2.png)
+
+   ![Orchestrator3](assets/orchestrator3.png)
+
+   ![Orchestrator4](assets/orchestrator4.png)
+
+   ![Orchestrator5](assets/orchestrator5.png)
+
+   ![Orchestrator6](assets/orchestrator6.png)
+   
+   ![Orchestrator7](assets/orchestrator7.png)
+   
+   
+   
+   
+   
