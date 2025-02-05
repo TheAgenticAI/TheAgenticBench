@@ -163,7 +163,7 @@ class SystemOrchestrator:
             )
 
             # Initialize Executor
-            executor_system_message = "A computer terminal that performs no other action than running Python scripts or sh shell scripts"
+            executor_system_message = "A computer terminal that performs no other action than running Python scripts or sh shell scripts. Always call the execute_code tool to execute the code and output the result."
             
             executor_type = os.environ.get("AGENTIC_BENCH_EXECUTOR")
             print()
@@ -361,28 +361,22 @@ class SystemOrchestrator:
                     # Extract dependencies and content from response string
                     response_parts = response.split(" dependencies=")
                     if len(response_parts) > 1:
-                        dependencies_content = response_parts[1].split(" sample_input=", 1)
-                        if len(dependencies_content) > 1:
+                        dependencies_content = response_parts[1].split(" content=", 1)
+                        if dependencies_content:
                             try:
                                 # Parse dependencies list from string
                                 dependencies = eval(dependencies_content[0])  # Convert string to actual list
-                                
-                                # Further split to extract sample_input and content
-                                sample_input_content = dependencies_content[1].split(" content=", 1)
-                                if len(sample_input_content) > 1:
-                                    # Extract sample_input (removing surrounding quotes if present)
-                                    sample_input = sample_input_content[0].strip("'")
-                                    # Extract content (removing surrounding quotes if present)
-                                    content = sample_input_content[1].strip("'")
+
+                                content_split = dependencies_content[1]
+                                if len(content_split) > 1:
+                                    content = content_split.strip("'")
                                     
                                     # Store in context for Executor to use
                                     self.context.last_code_block = {
                                         "dependencies": dependencies,
-                                        "sample_input": sample_input,
                                         "content": content
                                     }
                                     print("response block to send to executor", self.context.last_code_block)
-
                             except Exception as e:
                                 logfire.error(f"Failed to parse coder response: {e}")
 
@@ -395,7 +389,7 @@ class SystemOrchestrator:
                 if self.context.last_code_block:
                     self.executor_deps.content = self.context.last_code_block
                 success, response, messages = await agent.generate_reply(
-                    user_message="Execute the code",
+                    user_message=instruction,
                     deps=self.executor_deps,websocket=self.websocket,
                     stream_output=self.stream_output
                 )

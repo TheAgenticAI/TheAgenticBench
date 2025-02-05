@@ -30,6 +30,7 @@ from .executor_utils._common import (
     silence_pip,
     to_stub,
 )
+from utils.executors.executor_utils.extract_command_line_args import extract_command_line_args
 
 __all__ = ("LocalCommandLineCodeExecutor",)
 
@@ -322,11 +323,11 @@ $functions"""
         file_names: List[Path] = []
         exitcode = 0
         for code_block in code_blocks:
-            lang, code, packages,sample_input = (
+            lang, code, packages,human_input_or_command_line_args = (
                 code_block.language,
                 code_block.code,
                 code_block.packages,
-                code_block.sample_input
+                code_block.human_input_or_command_line_args
             )
             lang = lang.lower()
 
@@ -361,6 +362,9 @@ $functions"""
                 # create a file with an automatically generated name
                 code_hash = sha256(code.encode()).hexdigest()
                 filename = f"tmp_code_{code_hash}.{'py' if lang.startswith('python') else lang}"
+
+            command_line_args = extract_command_line_args(lang, filename, human_input_or_command_line_args)
+            print("extracted command_line_args", command_line_args)
 
             written_file = (self._work_dir / filename).resolve()
             with written_file.open("w", encoding="utf-8") as f:
@@ -403,6 +407,7 @@ $functions"""
                 asyncio.create_subprocess_exec(
                     program,
                     str(written_file.absolute()),
+                    *command_line_args,
                     cwd=self._work_dir,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
@@ -411,35 +416,100 @@ $functions"""
                 )
             )
             cancellation_token.link_future(task)
-            try:
-                if self.stream_output and self.websocket:
-                    self.stream_output.steps.append(
-                        "Executing the generated code in your safe environment"
-                    )
-                    await self.websocket.send_text(
-                        json.dumps(asdict(self.stream_output))
-                    )
-                proc = await task
-                print("task completed", proc)
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(sample_input.encode()), self._timeout
+            if self.stream_output and self.websocket:
+                self.stream_output.steps.append(
+                    "Executing the generated code in your safe environment"
                 )
-                exitcode = proc.returncode or 0
+                await self.websocket.send_text(
+                    json.dumps(asdict(self.stream_output))
+                )
+            proc = await task
 
-            except asyncio.TimeoutError:
-                logs_all += "\n Timeout"
-                # Same exit code as the timeout command on linux.
-                exitcode = 124
-                break
-            except asyncio.CancelledError:
-                logs_all += "\n Cancelled"
-                # TODO: which exit code? 125 is Operation Canceled
-                exitcode = 125
-                break
+            if(len(command_line_args) == 0):
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(b""), self._timeout
+                    )
+                    logs_all += stderr.decode()
+                    logs_all += stdout.decode()
+                except asyncio.TimeoutError:
+                    logs_all += "\n Timeout"
+                    exitcode = 124  # Exit code for timeout
+                except asyncio.CancelledError:
+                    logs_all += "\n Cancelled"
+                    exitcode = 125  # Exit code for operation canceled
+                except Exception as e:
+                    logs_all += f"\n Error: {e}"
+                    exitcode = 1  # Generic error code
+            elif(len(command_line_args) == 1):
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(command_line_args[0].encode()), self._timeout
+                    )
+                    logs_all += stderr.decode()
+                    logs_all += stdout.decode()
+                except asyncio.TimeoutError:
+                    logs_all += "\n Timeout"
+                    exitcode = 124  # Exit code for timeout
+                except asyncio.CancelledError:
+                    logs_all += "\n Cancelled"
+                    exitcode = 125  # Exit code for operation canceled
+                except Exception as e:
+                    logs_all += f"\n Error: {e}"
+                    exitcode = 1  # Generic error code
+            else:
+                for index, cmd_arg in enumerate(command_line_args):
+                    try:
+                        # Send the input to the subprocess
+                        proc.stdin.write(f"{cmd_arg}\n".encode())
+                        await proc.stdin.drain()  # Ensure the input is sent
+
+                        timeout = self._timeout
+                        if index != len(command_line_args) - 1:
+                            timeout = 5
+
+                        # Read the output (if any)
+                        stdout = await asyncio.wait_for(proc.stdout.readline(), timeout)
+                        stderr = await asyncio.wait_for(proc.stderr.readline(), timeout)
+
+                        logs_all += stderr.decode()
+                        logs_all += stdout.decode()
+                    except asyncio.TimeoutError:
+                        if(index == len(command_line_args) - 1):
+                            logs_all += "\n Timeout"
+                            exitcode = 124  # Exit code for timeout
+                            break
+                    except asyncio.CancelledError:
+                        logs_all += "\n Cancelled"
+                        exitcode = 125  # Exit code for operation canceled
+                        break
+                    except ConnectionResetError: # No human input needed, command line args were needed
+                        pass
+                    except Exception as e:
+                        logs_all += f"\n Error: {e}"
+                        exitcode = 1  # Generic error code
+                        break
+
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(b""), self._timeout
+                    )
+                    logs_all += stderr.decode()
+                    logs_all += stdout.decode()
+                except asyncio.TimeoutError:
+                    logs_all += "\n Timeout"
+                    exitcode = 124  # Exit code for timeout
+                except asyncio.CancelledError:
+                    logs_all += "\n Cancelled"
+                    exitcode = 125  # Exit code for operation canceled
+                except Exception as e:
+                    logs_all += f"\n Error: {e}"
+                    exitcode = 1  # Generic error code
 
             self._running_cmd_task = None
-            logs_all += stderr.decode()
-            logs_all += stdout.decode()
+            proc.stdin.close()
+            await proc.wait()
+            exitcode = proc.returncode or exitcode
 
             if exitcode != 0:
                 break

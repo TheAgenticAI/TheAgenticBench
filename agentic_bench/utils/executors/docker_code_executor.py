@@ -21,7 +21,7 @@ from .executor_utils import (
     FunctionWithRequirements,
     FunctionWithRequirementsStr,
 )
-
+from utils.executors.executor_utils.extract_command_line_args import extract_command_line_args
 from .executor_utils._common import (
     CommandLineCodeResult,
     build_python_functions_file,
@@ -275,7 +275,12 @@ $functions"""
                 fout.write(code)
             files.append(code_path)
 
-            command = ["timeout", str(self._timeout), lang_to_cmd(lang), filename]
+            human_input_or_command_line_args = code_block.human_input_or_command_line_args
+
+            command_line_args = extract_command_line_args(lang, filename, human_input_or_command_line_args)
+            print("extracted command_line_args", command_line_args)
+
+            command = ["timeout", str(self._timeout), lang_to_cmd(lang), filename, *command_line_args]
             if self.stream_output and self.websocket:
                 self.stream_output.steps.append(
                     "Executing the generated code in your safe environment"

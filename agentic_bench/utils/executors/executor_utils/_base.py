@@ -12,7 +12,7 @@ class CodeBlock:
     code: str
     packages: List
     language: str
-    sample_input:str
+    human_input_or_command_line_args:str
 
 @dataclass
 class CodeResult:

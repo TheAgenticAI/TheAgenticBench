@@ -53,7 +53,6 @@ class CoderResult(BaseModel):
         description="All the packages name that has to be installed before the code execution"
     )
     content: str = Field(description="Response content in the form of code")
-    sample_input:str=Field(description="Simulation of human input for execution of the code")
 
 class ExecutorDependencies(BaseModel):
     executor: CodeExecutor
@@ -148,7 +147,6 @@ class CoderAgent:
                 # Build properly formatted response
                 response = f"terminated={getattr(result.data, 'terminated', True)} "
                 response += f"dependencies={getattr(result.data, 'dependencies', [])} "
-                response += f"sample_input={getattr(result.data, 'sample_input', '')} "
                 response += f"content='{formatted_content}'"
 
                 return True, response, result.all_messages()
@@ -183,9 +181,11 @@ class Executor:
     def register_tool(self):
         @self._agent.tool
         async def execute_code(
-            ctx: RunContext[ExecutorDependencies],
+            ctx: RunContext[ExecutorDependencies], human_input_or_command_line_args: list[str]
         ) -> Tuple[bool, str]:
+            """Executes the code and returns the result. Takes in a list of human input or command line arguments."""
             try:
+                print("human_input_or_command_line_args", human_input_or_command_line_args)
                 # Now content is directly the dict we need
                 response_block = ctx.deps.content
                 print()
@@ -206,7 +206,7 @@ class Executor:
                             code=code_block,
                             packages=response_block["dependencies"],
                             language=code_lang,
-                            sample_input=response_block['sample_input'] if response_block['sample_input'] else ""
+                            human_input_or_command_line_args=human_input_or_command_line_args if human_input_or_command_line_args else ""
                         )
                     ]
 
