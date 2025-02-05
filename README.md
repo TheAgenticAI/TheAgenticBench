@@ -9,6 +9,7 @@
 - [Pre-Built Agent Library](#Pre-Built-Agent-Library)
 - [Workflow](#Workflow)
 - [Quick Start](#Quick-Start)
+- [Add New Agent](#Add-New-Agent)
 - [License](#License)
 
 ---
@@ -92,6 +93,11 @@ The following are the different processes in a typical execution workflow with T
   Agentic Bench: (http://localhost:8081) or (http://localhost:8081/docs to access the APIs)
   Agentic Browser: (http:localhost:8000) or (http://localhost:8000/docs to access the APIs)
   ```
+
+---
+
+## Add New Agent
+Follow the steps drafted in `CustomAgentInstructions.md` to setup and spin your custom agent super quick!
 
 ---
 
