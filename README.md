@@ -51,6 +51,8 @@ Key Features:
 
 ## How It Works:
 
+![image](https://github.com/user-attachments/assets/6d8ca723-0705-4dc7-804a-35ec0d8443aa)
+
 The following are the different processes in a typical execution workflow with TheAgenticBench:
 
 1. **Agents Initialization**: All the existing agents are initialized based on their dependencies and parameters as a first step
@@ -97,7 +99,7 @@ The following are the different processes in a typical execution workflow with T
 ---
 
 ## Add New Agent
-Follow the steps drafted in `CustomAgentInstructions.md` to setup and spin your custom agent super quick!
+Follow the steps drafted in [CustomAgentInstructions.md](CustomAgentInstructions.md) to setup and spin your custom agent super quick!
 
 ---
 
