@@ -1,13 +1,15 @@
-# Agentic Bench | Custom Agent
+# Add Your Custom Agents
+---
 
-## For Adding your own custom client follow the below steps:
+
+## For Adding your own custom agents, follow the steps mentioned below:
 
 1. Refer to (https://ai.pydantic.dev/) for an overview of setting up agents and some predefined methods
 2. Create your custom_agent file inside `/agentic_bench/agents`
 3. Setup your Agent prompt defining in detail the use case, reasoning steps if any, and all the steps applicable.
    > Entire Agent workflow depends on the quality of prompt, so keep it as detailed and naive as possible
 4. Create a class for your agent in the format:
-   ```
+   ```py
    class CustomAgent:
     def __init__(self,agent:Agent,name:str="CustomAgent",system_prompt:str=custom_agent_prompt)-> None:
         try:
@@ -26,7 +28,7 @@
    ```
 5. [Optional] Refer to (https://ai.pydantic.dev/dependencies/) & (https://ai.pydantic.dev/results/) to understand about Agent dependencies and results and configure if required. 
 6. [Optional] If the agent has to handle complex tasks which might include certain tool calls, uncomment the `self._register_tools()` statement and configure the method with all the tools as below:
-   ```
+   ```py
    def _register_tools(self):
         @self._agent.tool
         async def call_an_api(ctx:RunContext[CustomAgentDependency])-> <--A return data type expected from the tool-->:
@@ -35,7 +37,7 @@
    ```
    > Refer to (https://ai.pydantic.dev/tools/) to understand tools in-depth
 7. Configure a `generate_reply` function as below:
-   ```
+   ```py
    async def generate_reply(
         self, user_message: str, deps: CustomAgentDependency,websocket:WebSocket,
                     stream_output:StreamResponse
