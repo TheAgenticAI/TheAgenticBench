@@ -300,6 +300,10 @@ $functions"""
                 break
 
         code_file = str(files[0]) if files else None
+
+        print("exit code", exit_code)
+        print("logs all", "".join(outputs))
+        
         return CommandLineCodeResult(
             exit_code=last_exit_code, output="".join(outputs), code_file=code_file
         )

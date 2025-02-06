@@ -506,6 +506,9 @@ $functions"""
                     logs_all += f"\n Error: {e}"
                     exitcode = 1  # Generic error code
 
+            print("exit code", exitcode)
+            print("logs all", logs_all)
+
             self._running_cmd_task = None
             proc.stdin.close()
             await proc.wait()
