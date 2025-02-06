@@ -51,7 +51,7 @@ Key Features:
 
 ## How It Works:
 
-![image](https://github.com/user-attachments/assets/6d8ca723-0705-4dc7-804a-35ec0d8443aa)
+![image](assets/ta_bench_diagram.png)
 
 The following are the different processes in a typical execution workflow with TheAgenticBench:
 
