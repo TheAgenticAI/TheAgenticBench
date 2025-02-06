@@ -67,20 +67,85 @@
    # You can skip the Dependency if not already configured
    ```
 8. Go to the `orchestrator.py` and include your agent in the below sections:
-   
-   ![Orchestrator1](assets/orchestrator1.png)
+   - Import the relevant functions and your agent class previously configured just like done below
+      ```py
+      from agents.file_surfer import FileSurfer, FileToolDependencies, RequestsMarkdownBrowser
+      from agents.web_surfer import WebSurfer
+      from agents.coder_agent import (
+          CoderAgent, CoderDependencies, Executor, ExecutorDependencies,
+          DockerCodeExecutor, LocalCodeExecutor, CoderResult, coder_system_message
+      )
+      from agents.rag_agent import RAGAgent, RAGDependencies
+      ```
+   - Include your agent in the init block of the System Orchestrator
+     ```py
+     class SystemOrchestrator:
+     def __init__(self):
+        self.agents: List[Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent]] = []
+     ```
+   - Include your agent in the initialize_agents return List as below
+     ```py
+     async def initialize_agents(self) -> List[Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent]]:
+     ```
+   - Initialize the agent within the initialize_agents in a similar manner.
+     ```py
+     file_surfer = Agent(
+                model=self.model,
+                name="File Surfer Agent"
+            )
+     file_surfer_agent = FileSurfer(
+          agent=file_surfer
+      )
+     ```
+   - [Optional] In case your agent includes dependencies as well, you can follow this snippet
+     ```py
+      self.coder_deps = CoderDependencies(
+                description=coder_description,
+                system_messages=coder_system_message,
+                request_terminate=False
+            )
 
-   ![Orchestrator2](assets/orchestrator2.png)
+      cod_agent = Agent(
+          model=self.model,
+          name="Coder Agent",
+          deps_type=CoderDependencies,
+          result_type=CoderResult
+      )
+      coder_agent = CoderAgent(
+          agent=cod_agent,
+          system_prompt=coder_system_message
+      )
+     ```
+   - Include your agent within the execute_agent_instruction function definition just as below
+     ```py
+      async def execute_agent_instruction(self, agent: Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent], instruction: str) -> AgentExecutionResult:
+        """Execute agent instruction with robust error handling using generate_reply"""
+     ```
+   - Write your agent execution snippet or the entry point to your agent in a similar manner
+     ```py
+      if isinstance(agent, CoderAgent):
+             success, response, messages = await agent.generate_reply(
+                 user_message=instruction,
+                 deps=self.coder_deps,websocket=self.websocket,
+                 stream_output=self.stream_output
+             )
+     ```
+   - Include your agent within the return block of _get_agent_by_name in a similar manner
+     ```py
+      def _get_agent_by_name(self, name: str) -> Optional[Union[FileSurfer, CoderAgent, Executor, WebSurfer, RAGAgent]]:
+     ```
 
-   ![Orchestrator3](assets/orchestrator3.png)
-
-   ![Orchestrator4](assets/orchestrator4.png)
-
-   ![Orchestrator5](assets/orchestrator5.png)
-
-   ![Orchestrator6](assets/orchestrator6.png)
-   
-   ![Orchestrator7](assets/orchestrator7.png)
+9. Now configure websocket so as to realtime stream your agent actions to the UI
+   - Setup the intermediate steps you want to stream realtime. Include this snippet and tweak it as per your use case at every part which might be relevant to be shown in the UI
+     ```py
+     if self.stream_output and self.websocket:
+            self.stream_output.steps.append(
+                event_data["message"]
+            )
+            await self.websocket.send_text(
+                json.dumps(asdict(self.stream_output))
+            )
+     ```
    
    
    
