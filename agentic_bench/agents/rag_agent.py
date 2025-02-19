@@ -20,6 +20,11 @@ from utils.initializers.rag_constants import AGENT_DESCRIPTION_FINANCE
 
 tracemalloc.start()
 
+if not os.path.exists(WORKING_DIR):
+    os.makedirs(WORKING_DIR)
+
+if not os.path.exists(PDF_DIRECTORY):
+    os.makedirs(PDF_DIRECTORY)
 
 @dataclass
 class RAGDependencies:
